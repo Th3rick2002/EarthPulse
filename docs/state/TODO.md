@@ -1,14 +1,37 @@
-# Pendiente
+# TODO
 
-## Siguiente paso backend
+Las historias con requerimientos y criterios de terminado se gestionan en el [GitHub Project TrendScope — MVP](https://github.com/users/Th3rick2002/projects/4). Esta lista resume el orden de trabajo; no reemplaza las tarjetas.
 
-1. Trabajar la tarjeta **[P0][Dev Backend] Implementar modelos Pydantic y contrato OpenAPI** del [GitHub Project](https://github.com/users/Th3rick2002/projects/4). La tarjeta contiene el DTO FE/BE completo, las rutas, la envoltura `data`, enums, nullability y criterios de aceptación; ese contenido es la referencia visible para los tres devs.
-2. Alinear la tarjeta **[P0][Dev Backend] Implementar app FastAPI y rutas del esquema** con esos modelos y publicar las rutas bajo `/api/v1`.
-3. Corregir el PR #1 antes de integrarlo: sus DTOs/rutas divergen del contrato de la tarjeta P0. Revisar campo por campo contra el Project y mantener `docs/specs/data-and-api.md` sincronizado.
-4. Después de fijar el OpenAPI, el dev frontend genera tipos y consume ese contrato desde su tarjeta P0 del Project.
+## Prioridad alta
 
-## Pendiente de equipo e infraestructura
+### Backend / datos
 
-- Dar acceso al GitHub Project privado a los otros dos devs.
-- Preguntar al usuario si el frontend se publicará en GoDaddy o GCP Storage/CDN y agregar la tarea de despliegue correspondiente.
-- Configurar credenciales como secretos del entorno y completar despliegue/observabilidad.
+- [ ] Confirmar cuenta Meteomatics y disponibilidad de CHIRPS `precip_24h:mm`.
+- [ ] Implementar `MeteomaticsClient.fetch_monthly()` con autenticación, agregación, timeout y manejo de rate limits.
+- [ ] Implementar Planetary Computer STAC para MODIS NDVI: búsqueda por bbox/fecha, QA, escala y agregación espacial/temporal.
+- [ ] Añadir cache TTL de 24 h a `GET /api/v1/series` usando el esquema acordado.
+- [ ] Completar integración Firestore si será el almacenamiento de despliegue.
+
+### Frontend
+
+- [ ] Generar tipos TypeScript desde `/openapi.json` y consumir `/api/v1/*`.
+- [ ] Integrar selector variable/región, globo, serie temporal y tarjeta de tendencia.
+- [ ] Cubrir loading, error, sin observaciones y `trendAnalysis: null` según `docs/specs/ui-ux.md`.
+
+## Prioridad media
+
+- [ ] Validar fechas futuras y reglas de bbox para regiones personalizadas.
+- [ ] Añadir logging estructurado y métricas por endpoint/proveedor.
+- [ ] Revisar health check y operación ante indisponibilidad de proveedores.
+
+## Prioridad baja
+
+- [ ] Añadir LST MODIS solo cuando el MVP tenga necesidad y proveedor validados.
+- [ ] Evaluar regiones adicionales y análisis estacional/intervalos de confianza.
+- [ ] Agregar detección de outliers si lo requiere el producto.
+
+## Equipo e infraestructura
+
+- [ ] Dar acceso al GitHub Project privado a los otros dos devs.
+- [ ] Definir hosting frontend antes de crear la tarea de despliegue.
+- [ ] Configurar credenciales como secretos en el entorno de despliegue.
