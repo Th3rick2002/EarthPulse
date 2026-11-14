@@ -1,23 +1,29 @@
 # DONE
 
-## Backend: contrato canónico FE/BE
+## Estructura y coordinación
+
+- Documentación de `/docs` y reglas compartidas.
+- Instrucciones de instalación y arranque en README de frontend y backend.
+- Creado el [GitHub Project TrendScope — MVP](https://github.com/users/Th3rick2002/projects/4) con historias separadas por Backend, Frontend e Infra.
+- Contrato HTTP FE/BE y decisiones UI/UX documentadas en `docs/specs/data-and-api.md` y `docs/specs/ui-ux.md`.
+
+## Backend: contrato canónico
 
 - DTOs Pydantic y rutas `/api/v1/variables`, `/api/v1/regions`, `/api/v1/series` y `/api/v1/health`.
-- Contrato documentado en `docs/specs/data-and-api.md`, con envoltura `{data:...}` y excepción de health.
 - Catálogo MVP de variables y regiones en `backend/app/data/catalog.py`.
 - Series mensuales, calidades `ok`/`missing`/`interpolated` y análisis Mann-Kendall/Sen.
-- SQLite para desarrollo y estructura de repositorios existente.
+- Validaciones de bbox, fechas mensuales, relación entre `value` y `quality`, rango de p-value y consistencia de significancia.
+- Errores uniformes para HTTP, validación y excepciones internas; ID único en `requestId` y `X-Request-ID`.
+- Cobertura mínima: `minYears` y al menos 50% de meses solicitados con `quality=ok`.
+- Fallos de proveedor explícitos; no usar datos mock como sustituto silencioso.
+- Sen slope expresado por año calendario; Amazon bbox con `lonMax=-45`.
+- Swagger UI `/docs` y esquema OpenAPI `/openapi.json` provistos por FastAPI.
 
-## Ajustes del contrato aplicados en esta rama
+## Integración de ramas
 
-- Validación de bbox, fechas mensuales completas, relación entre `value` y `quality`, rango de `pValue` y consistencia de `significant`.
-- Error envelope uniforme para HTTP, validación y excepciones internas; `requestId` único también se expone como `X-Request-ID`.
-- OpenAPI declara respuestas de error de catálogo, series y health.
-- Criterio de análisis: requiere `minYears` y 50% de meses observados (`quality=ok`).
-- Fallos de proveedor: ausencia de credenciales, integraciones no implementadas, timeout o fallo producen 502/503/504 en vez de datos sintéticos.
-- Sen slope expresado por año calendario; fechas faltantes no comprimen el eje temporal.
-- Amazon bbox alineado con la especificación (`lonMax=-45`).
+- Al resolver el PR #1 se incorporan también `.env.example`, dependencias de Planetary Computer y la especificación UI/UX que ya estaban en `dev`.
+- La resolución conserva el contrato actualizado y las tareas pendientes de integración real.
 
-## Verificación de este cambio
+## Verificación
 
-- Aún no se ejecutaron pruebas ni `git diff --check` para esta tanda.
+- No se ejecutaron pruebas en esta tanda de resolución de conflictos.

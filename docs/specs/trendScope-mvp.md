@@ -30,6 +30,8 @@ Tendencias no lineales, eliminación de ciclos estacionales, análisis estadíst
 
 ## Aceptación
 
+La experiencia de pantalla, el orden de los resultados y los estados del frontend se definen en [UI/UX del MVP](ui-ux.md).
+
 - Consulta completa frontend-backend para un ejemplo soportado y datos identificados por fuente/producto.
 - El gráfico y veredicto representan el mismo intervalo y serie; unidades y pendiente son explícitas.
 - Menos de cinco años o datos insuficientes producen un estado explicativo, sin fabricar un veredicto.

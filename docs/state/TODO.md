@@ -1,63 +1,37 @@
 # TODO
 
+Las historias con requerimientos y criterios de terminado se gestionan en el [GitHub Project TrendScope — MVP](https://github.com/users/Th3rick2002/projects/4). Esta lista resume el orden de trabajo; no reemplaza las tarjetas.
+
 ## Prioridad alta
 
-### [P0] Dev 1 + Dev 3 - Integración real Meteomatics
-- [ ] Confirmar acceso contratado a Meteomatics (Dev 3)
-- [ ] Verificar que CHIRPS (precip_24h:mm) está habilitado en la cuenta
-- [ ] Implementar `MeteomaticsClient.fetch_monthly()` con autenticación y paginación
-- [ ] Manejar rate limits, timeouts, y errores de proveedor
-- [ ] Añadir variables de entorno `METEOMATICS_USERNAME`, `METEOMATICS_PASSWORD` a `.env.example`
+### Backend / datos
 
-### [P0] Dev 1 - Integración real Planetary Computer
-- [ ] Implementar `PlanetaryComputerClient.fetch_monthly()` usando STAC + rasterio/rioxarray
-- [ ] Búsqueda STAC por colección `modis-13Q1-061`, bbox, rango temporal
-- [ ] Lectura banda NDVI, escala 0.0001, agregación espacial (mean) y temporal (mensual)
-- [ ] Manejar Cloud Optimized GeoTIFFs y signed URLs
+- [ ] Confirmar cuenta Meteomatics y disponibilidad de CHIRPS `precip_24h:mm`.
+- [ ] Implementar `MeteomaticsClient.fetch_monthly()` con autenticación, agregación, timeout y manejo de rate limits.
+- [ ] Implementar Planetary Computer STAC para MODIS NDVI: búsqueda por bbox/fecha, QA, escala y agregación espacial/temporal.
+- [ ] Añadir cache TTL de 24 h a `GET /api/v1/series` usando el esquema acordado.
+- [ ] Completar integración Firestore si será el almacenamiento de despliegue.
 
-### [P0] Dev 2 - Frontend integra API `/api/v1/*`
-- [ ] Generar tipos TypeScript desde OpenAPI spec (`openapi-typescript` o similar)
-- [ ] Implementar hooks/servicios para `/api/v1/variables`, `/api/v1/regions`, `/api/v1/series`
-- [ ] UI: selector variable/región, gráfico temporal, tarjeta veredicto
-- [ ] Estados: loading, error, sin datos, cobertura insuficiente (`trendAnalysis: null`)
+### Frontend
+
+- [ ] Generar tipos TypeScript desde `/openapi.json` y consumir `/api/v1/*`.
+- [ ] Integrar selector variable/región, globo, serie temporal y tarjeta de tendencia.
+- [ ] Cubrir loading, error, sin observaciones y `trendAnalysis: null` según `docs/specs/ui-ux.md`.
 
 ## Prioridad media
 
-### [P1] Dev 1 - Caché con TTL 24h
-- [ ] Integrar `SQLiteCacheRepository` en `GET /api/v1/series`
-- [ ] Clave de caché: `variableId:regionId:startDate:endDate:provider:product`
-- [ ] Invalidar/actualizar según TTL
-- [ ] Métricas: hit/miss ratio en logs
-
-### [P1] Dev 1 - Validaciones adicionales
-- [ ] Validar que `startDate`/`endDate` no sean futuras
-- [ ] Validar bbox custom (área máxima, antimeridiano)
-- [ ] Rate limiting básico en API
-
-### [P1] Dev 1 - Métricas y observabilidad
-- [ ] Logging estructurado (JSON) para requests/responses
-- [ ] Métricas de latencia por endpoint
-- [ ] Health check incluye conectividad a proveedores
+- [ ] Validar fechas futuras y reglas de bbox para regiones personalizadas.
+- [ ] Añadir logging estructurado y métricas por endpoint/proveedor.
+- [ ] Revisar health check y operación ante indisponibilidad de proveedores.
 
 ## Prioridad baja
 
-### [P2] Dev 1 - Variables/regiones adicionales
-- [ ] `land_surface_temperature` (MODIS 11A2) cuando sea relevante
-- [ ] Regiones adicionales: Congo, Boreal, etc.
-- [ ] Regiones custom dibujadas por usuario (validación backend)
+- [ ] Añadir LST MODIS solo cuando el MVP tenga necesidad y proveedor validados.
+- [ ] Evaluar regiones adicionales y análisis estacional/intervalos de confianza.
+- [ ] Agregar detección de outliers si lo requiere el producto.
 
-### [P2] Dev 1 - Mejoras análisis
-- [ ] Test de estacionalidad (Mann-Kendall estacional)
-- [ ] Intervalo de confianza para pendiente
-- [ ] Detección de outliers en observaciones
+## Equipo e infraestructura
 
----
-
-## Notas de implementación
-
-- **Rama actual**: `feat/backend-catalog-and-series` → PR a `dev`
-- **Commits nuevos para este PR**:
-  - `feat: contrato canónico /api/v1/* - schemas, catalog, series, health`
-  - `feat: timeSeries con quality ok/missing/interpolated + trendAnalysis nullable`
-  - `docs: data-and-api.md actualizado a contrato canónico FE/BE`
-- **Separar código de docs** en commits distintos
+- [ ] Dar acceso al GitHub Project privado a los otros dos devs.
+- [ ] Definir hosting frontend antes de crear la tarea de despliegue.
+- [ ] Configurar credenciales como secretos en el entorno de despliegue.
