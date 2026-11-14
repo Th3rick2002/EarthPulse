@@ -122,8 +122,8 @@ Este documento define el contrato exacto entre frontend y backend. Los modelos P
 
 ### Regiones
 
-| regionId | name | type | bbox (latMin, latMax, lonMin, lonMax) | Variables soportadas |
-|----------|------|------|----------------------------------------|---------------------|
+| regionId | name | type | bbox (latMin, latMax, lonMin, lonMax) | Variables |
+|----------|------|------|----------------------------------------|-----------|
 | `amazon` | Amazon Basin | predefined | (-20.0, 5.0, -80.0, -50.0) | ndvi, precipitation |
 | `arctic` | Arctic Circle | predefined | (66.5, 90.0, -180.0, 180.0) | air_temperature |
 
@@ -146,24 +146,7 @@ Este documento define el contrato exacto entre frontend y backend. Los modelos P
       "category": "vegetation",
       "minYears": 5
     },
-    {
-      "variableId": "air_temperature",
-      "name": "Air Temperature (2m)",
-      "description": "Near-surface air temperature from ERA5 reanalysis. Monthly mean of hourly values.",
-      "unit": "°C",
-      "source": "meteomatics:ecmwf-era5:t_2m:C",
-      "category": "temperature",
-      "minYears": 5
-    },
-    {
-      "variableId": "precipitation",
-      "name": "Precipitation",
-      "description": "Total monthly precipitation from CHIRPS satellite-gauge blend. Sum of daily 24h accumulations.",
-      "unit": "mm",
-      "source": "meteomatics:chc-chirps3:precip_24h:mm",
-      "category": "precipitation",
-      "minYears": 5
-    }
+    ...
   ]
 }
 ```
@@ -179,13 +162,7 @@ Este documento define el contrato exacto entre frontend y backend. Los modelos P
       "description": "Amazon rainforest extent for vegetation and precipitation monitoring.",
       "type": "predefined"
     },
-    {
-      "regionId": "arctic",
-      "name": "Arctic Circle",
-      "bbox": {"latMin": 66.5, "latMax": 90.0, "lonMin": -180.0, "lonMax": 180.0},
-      "description": "High-latitude region for air temperature trend monitoring (crosses antimeridian).",
-      "type": "predefined"
-    }
+    ...
   ]
 }
 ```
@@ -194,22 +171,8 @@ Este documento define el contrato exacto entre frontend y backend. Los modelos P
 ```json
 {
   "data": {
-    "variable": {
-      "variableId": "ndvi",
-      "name": "NDVI (Normalized Difference Vegetation Index)",
-      "description": "Vegetation health index from MODIS surface reflectance. Values range -1 to 1; higher = greener.",
-      "unit": "index",
-      "source": "planetary-computer:modis-13Q1-061:250m_16_days_NDVI",
-      "category": "vegetation",
-      "minYears": 5
-    },
-    "region": {
-      "regionId": "amazon",
-      "name": "Amazon Basin",
-      "bbox": {"latMin": -20.0, "latMax": 5.0, "lonMin": -80.0, "lonMax": -50.0},
-      "description": "Amazon rainforest extent for vegetation and precipitation monitoring.",
-      "type": "predefined"
-    },
+    "variable": { ... },
+    "region": { ... },
     "timeSeries": [
       {"seriesId": "ndvi:amazon:2018-01-01", "variableId": "ndvi", "regionId": "amazon", "date": "2018-01-01", "value": 0.6548, "quality": "ok"},
       {"seriesId": "ndvi:amazon:2018-02-01", "variableId": "ndvi", "regionId": "amazon", "date": "2018-02-01", "value": 0.6182, "quality": "ok"}
@@ -236,10 +199,7 @@ Este documento define el contrato exacto entre frontend y backend. Los modelos P
   "data": {
     "variable": { ... },
     "region": { ... },
-    "timeSeries": [
-      {"seriesId": "ndvi:amazon:2023-01-01", "variableId": "ndvi", "regionId": "amazon", "date": "2023-01-01", "value": 0.6514, "quality": "ok"},
-      {"seriesId": "ndvi:amazon:2023-02-01", "variableId": "ndvi", "regionId": "amazon", "date": "2023-02-01", "value": 0.6664, "quality": "ok"}
-    ],
+    "timeSeries": [ ... ],
     "trendAnalysis": null
   }
 }

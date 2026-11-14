@@ -10,7 +10,7 @@ Backend MVP implementado con **contrato canónico FE/BE** (`/api/v1/` prefix, en
 - **Errores**: Formato estándar `{error: {code, message, details, requestId}}` (400, 404, 500)
 - **Esquemas Pydantic**: `backend/app/schemas/contract.py` - DTOs exactos del contrato (VariableDTO, RegionDTO, TimeSeriesPointDTO, TrendAnalysisDTO, etc.)
 - **Capa de repositorio**: SQLite para desarrollo local, interfaz Firestore para producción
-- **Clientes proveedores**: Esqueletos Meteomatics/PlanetaryComputer con fallback mock (credenciales en `.env`)
+- **Clientes proveedores**: Esqueletos Meteammatics/PlanetaryComputer con fallback mock (credenciales en `.env`)
 - **Documentación**: `docs/specs/data-and-api.md` actualizado con contrato canónico y ejemplos JSON
 
 ## Siguiente acción
