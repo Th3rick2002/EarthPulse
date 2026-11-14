@@ -1,45 +1,50 @@
 # DONE
 
-## Backend MVP - Catálogo y Series (Dev 1)
+## Backend MVP - Contrato canónico FE/BE (Dev 1)
 
-### ✅ [P0] Registrar catálogo MVP de variables y regiones
-- **Archivo**: `backend/app/data/catalog.py`
-- Variables implementadas:
-  - `ndvi`: Planetary Computer modis-13Q1-061, asset 250m_16_days_NDVI, escala 0.0001, agregado mensual (mean)
-  - `air_temperature`: Meteomatics source=ecmwf-era5, t_2m:C, media mensual
-  - `precipitation`: Meteomatics source=chc-chirps3, precip_24h:mm, suma mensual
-  - `land_surface_temperature`: Dejado para después (documentado)
-- Regiones implementadas:
-  - `amazon`: bbox WGS84 (-20.0, 5.0, -80.0, -50.0), para NDVI/precipitación
-  - `arctic`: bbox WGS84 (66.5, 90.0, -180.0, 180.0), para temperatura del aire
-- Endpoints: `GET /variables`, `GET /regions` entregan catálogo completo
-- Validación de bbox y conversión de orden por proveedor (STAC vs Meteomatics)
+### ✅ [P0] Implementar modelos Pydantic y contrato OpenAPI
+- **Archivos nuevos**:
+  - `backend/app/schemas/contract.py` - DTOs exactos del contrato (VariableDTO, RegionDTO, BBoxDTO, TimeSeriesPointDTO, TrendAnalysisDTO, ErrorDetail, ErrorResponse, HealthResponse, wrappers)
+  - `backend/app/routers/contract_catalog.py` - GET /api/v1/variables, GET /api/v1/regions
+  - `backend/app/routers/contract_series.py` - GET /api/v1/series
+  - `backend/app/routers/health.py` - GET /api/v1/health
+- **Contrato implementado campo por campo**:
+  - Variable: `variableId`, `name`, `description`, `unit`, `source`, `category`, `minYears`
+  - Region: `regionId`, `name`, `bbox` (objeto con latMin/latMax/lonMin/lonMax), `description`, `type`
+  - TimeSeries: `seriesId`, `variableId`, `regionId`, `date`, `value` (nullable), `quality` ("ok"|"missing"|"interpolated")
+  - TrendAnalysis: `analysisId`, `variableId`, `regionId`, `startDate`, `endDate`, `slope` (unidad/año), `pValue`, `significant`, `interpretation`, `createdAt`
+  - ApiError: `error.{code,message,details,requestId}`
+- **Rutas**: `/api/v1/variables`, `/api/v1/regions`, `/api/v1/series`, `/api/v1/health`
+- **Envoltura**: `{data: ...}` en respuestas exitosas, `{error: ...}` en errores
+- **OpenAPI**: `/openapi.json` describe exactamente estos nombres y tipos
 
-### ✅ [P0] Cerrar contrato GET /series
-- **Archivos**: `backend/app/schemas/series.py`, `backend/app/routers/series.py`
-- Request: `GET /series?variableId=...&regionId=...&startDate=...&endDate=...`
-- Response incluye: variable, region/bbox, source, unit, frequency, coverage, observations[], analysis{}
-- Validación: 400 para fechas/bbox/parámetros inválidos, 404 para catálogo inexistente
-- Cobertura < 5 años: devuelve `insufficientReason` y `analysis: null`, no inventa análisis
-- Análisis: Mann-Kendall con p < 0.05, pendiente de Sen, interpretación en lenguaje natural
+### ✅ [P0] Catálogo MVP de variables y regiones (actualizado a contrato)
+- **Archivo**: `backend/app/data/catalog.py` (fuente de verdad interna)
+- Variables: ndvi (PC MODIS), air_temperature (Meteomatics ERA5), precipitation (Meteomatics CHIRPS)
+- Regiones: amazon (NDVI/precip), arctic (air_temp) con bbox WGS84
+- Conversión bbox interna → contrato (objeto latMin/latMax/lonMin/lonMax)
 
-### ✅ Esquemas Pydantic y validación
-- `backend/app/schemas/catalog.py`: VariableResponse, RegionResponse
-- `backend/app/schemas/series.py`: SeriesRequest, SeriesResponse, Observation, Coverage, SourceInfo, Analysis
+### ✅ [P0] GET /api/v1/series con validación y análisis
+- **Request**: `variableId`, `regionId`, `startDate`, `endDate` (inclusivas, meses completos)
+- **Response**: `{data: {variable, region, timeSeries[], trendAnalysis|null}}`
+- **Validación**: 400 (fechas, combinación variable-región), 404 (catálogo inexistente)
+- **Cobertura < 5 años**: `trendAnalysis: null` (no inventa análisis)
+- **Análisis**: Mann-Kendall + Sen's slope (pymannkendall), p < 0.05, slope en unidad/año
 
 ### ✅ Servicios de análisis y proveedores
-- `backend/app/services/analysis.py`: Mann-Kendall + Sen's slope usando `pymannkendall`
-- `backend/app/services/providers.py`: Protocol + esqueletos MeteomaticsClient, PlanetaryComputerClient, MockProvider
+- `backend/app/services/analysis.py`: Mann-Kendall + Sen's slope
+- `backend/app/services/providers.py`: Protocol + MeteomaticsClient, PlanetaryComputerClient, MockProvider (credenciales en `.env`)
 
-### ✅ Capa de repositorio (persistencia)
-- `backend/app/repositories/sqlite_repo.py`: SQLite para desarrollo local
+### ✅ Capa de repositorio
+- `backend/app/repositories/sqlite_repo.py`: SQLite para desarrollo
 - `backend/app/repositories/firestore_repo.py`: Interfaz Firestore para Cloud Run
-- `backend/app/repositories/base.py`: Interfaces abstractas
 
 ### ✅ Documentación actualizada
-- `docs/specs/data-and-api.md`: Contratos finales con ejemplos JSON válido/insuficiente
+- `docs/specs/data-and-api.md`: Contrato canónico completo con ejemplos JSON válido/insuficiente/error
 
 ### Verificación
-- Todos los endpoints responden correctamente (200, 400, 404)
-- OpenAPI spec generado en `/docs`
-- Tests manuales pasados para ndvi/amazon, air_temperature/arctic, precipitation/amazon
+- Todos los endpoints `/api/v1/*` responden correctamente (200, 400, 404, 500)
+- OpenAPI spec en `/openapi.json` genera tipos TypeScript sin mapeo de campos
+- Tests manuales pasados: ndvi/amazon, air_temperature/arctic, precipitation/amazon
+- Cobertura insuficiente → `trendAnalysis: null`
+- Errores devuelven formato `{error: {code, message, details, requestId}}`

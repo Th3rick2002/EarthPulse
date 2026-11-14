@@ -15,16 +15,16 @@
 - [ ] Lectura banda NDVI, escala 0.0001, agregación espacial (mean) y temporal (mensual)
 - [ ] Manejar Cloud Optimized GeoTIFFs y signed URLs
 
-### [P0] Dev 2 - Frontend integra API
+### [P0] Dev 2 - Frontend integra API `/api/v1/*`
 - [ ] Generar tipos TypeScript desde OpenAPI spec (`openapi-typescript` o similar)
-- [ ] Implementar hooks/servicios para `/variables`, `/regions`, `/series`
+- [ ] Implementar hooks/servicios para `/api/v1/variables`, `/api/v1/regions`, `/api/v1/series`
 - [ ] UI: selector variable/región, gráfico temporal, tarjeta veredicto
-- [ ] Estados: loading, error, sin datos, cobertura insuficiente
+- [ ] Estados: loading, error, sin datos, cobertura insuficiente (`trendAnalysis: null`)
 
 ## Prioridad media
 
 ### [P1] Dev 1 - Caché con TTL 24h
-- [ ] Integrar `SQLiteCacheRepository` en `GET /series`
+- [ ] Integrar `SQLiteCacheRepository` en `GET /api/v1/series`
 - [ ] Clave de caché: `variableId:regionId:startDate:endDate:provider:product`
 - [ ] Invalidar/actualizar según TTL
 - [ ] Métricas: hit/miss ratio en logs
@@ -56,10 +56,8 @@
 ## Notas de implementación
 
 - **Rama actual**: `feat/backend-catalog-and-series` → PR a `dev`
-- **Commits sugeridos**:
-  1. `feat: catálogo variables/regiones + endpoints /variables /regions`
-  2. `feat: endpoint /series con validación y análisis Mann-Kendall`
-  3. `feat: esquemas Pydantic, servicios análisis, clientes proveedores mock`
-  4. `feat: capa repositorio SQLite/Firestore`
-  5. `docs: actualizar data-and-api.md con contratos finales`
-- **Separar código de docs** en PRs distintos si el diff es grande
+- **Commits nuevos para este PR**:
+  - `feat: contrato canónico /api/v1/* - schemas, catalog, series, health`
+  - `feat: timeSeries con quality ok/missing/interpolated + trendAnalysis nullable`
+  - `docs: data-and-api.md actualizado a contrato canónico FE/BE`
+- **Separar código de docs** en commits distintos
