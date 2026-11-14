@@ -2,7 +2,7 @@
 
 ## Estado
 
-El contrato FE/BE canónico está visible en la tarjeta P0 **Implementar modelos Pydantic y contrato OpenAPI** del [GitHub Project](https://github.com/users/Th3rick2002/projects/4); `docs/specs/data-and-api.md` debe mantenerse sincronizado con esa tarjeta. El Project tiene catorce tarjetas por área. El PR #1 (`feat/backend-catalog-and-series`) está abierto hacia `dev` y requiere alinear rutas y DTOs antes de integrarlo. El frontend contiene una plantilla Vite/React; la rama local y el PR remoto pueden tener estados distintos.
+El contrato FE/BE canónico está visible en la tarjeta P0 **Implementar modelos Pydantic y contrato OpenAPI** del [GitHub Project](https://github.com/users/Th3rick2002/projects/4); `docs/specs/data-and-api.md` debe mantenerse sincronizado con esa tarjeta. La UI/UX MVP está definida en `docs/specs/ui-ux.md` y reflejada en las cuatro historias Frontend del Project. El Project tiene catorce tarjetas por área. El PR #1 (`feat/backend-catalog-and-series`) está abierto hacia `dev` y requiere alinear rutas y DTOs antes de integrarlo. El frontend contiene una plantilla Vite/React; la rama local y el PR remoto pueden tener estados distintos.
 
 ## Siguiente acción
 
@@ -21,5 +21,5 @@ Continuar el PR #1 según la tarjeta P0 de contrato en GitHub Project: alinear D
 ## Documentos clave
 
 - Reglas: `docs/rules/coding.md`, `docs/rules/domain.md`.
-- Especificaciones: `docs/specs/INDEX.md`, `docs/specs/data-and-api.md`.
+- Especificaciones: `docs/specs/INDEX.md`, `docs/specs/ui-ux.md`, `docs/specs/data-and-api.md`.
 - Arranque: `frontend/README.md`, `backend/README.md`.
