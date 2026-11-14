@@ -4,7 +4,9 @@ This module defines the exact DTOs specified in the contract card.
 Field names use camelCase via alias to match JSON contract exactly.
 """
 
-from pydantic import BaseModel, Field, ConfigDict
+from calendar import monthrange
+
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from datetime import date, datetime
 from typing import Literal, Optional
 from uuid import uuid4
@@ -59,12 +61,18 @@ class VariableDTO(BaseModel):
 
 class BBoxDTO(BaseModel):
     """Bounding box as object per contract."""
-    latMin: float
-    latMax: float
-    lonMin: float
-    lonMax: float
+    latMin: float = Field(ge=-90, le=90)
+    latMax: float = Field(ge=-90, le=90)
+    lonMin: float = Field(ge=-180, le=180)
+    lonMax: float = Field(ge=-180, le=180)
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    @model_validator(mode="after")
+    def validate_latitude_order(self):
+        if self.latMin >= self.latMax:
+            raise ValueError("latMin must be less than latMax")
+        return self
 
 
 class RegionDTO(BaseModel):
@@ -84,10 +92,23 @@ class TimeSeriesPointDTO(BaseModel):
     variableId: str
     regionId: str
     date: date
-    value: Optional[float] = None
+    value: Optional[float]
     quality: QualityValue
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    @field_validator("date")
+    @classmethod
+    def date_must_start_month(cls, value: date) -> date:
+        if value.day != 1:
+            raise ValueError("date must be the first day of the month")
+        return value
+
+    @model_validator(mode="after")
+    def validate_value_quality(self):
+        if (self.quality == "missing") != (self.value is None):
+            raise ValueError("value must be null exactly when quality is missing")
+        return self
 
 
 class TrendAnalysisDTO(BaseModel):
@@ -98,12 +119,22 @@ class TrendAnalysisDTO(BaseModel):
     startDate: date
     endDate: date
     slope: float
-    pValue: float
+    pValue: float = Field(ge=0, le=1)
     significant: bool
     interpretation: str
     createdAt: datetime
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    @model_validator(mode="after")
+    def validate_analysis(self):
+        if self.startDate.day != 1 or self.endDate.day != monthrange(self.endDate.year, self.endDate.month)[1]:
+            raise ValueError("analysis dates must cover inclusive full months")
+        if self.startDate > self.endDate:
+            raise ValueError("startDate must not be after endDate")
+        if self.significant != (self.pValue < 0.05):
+            raise ValueError("significant must equal pValue < 0.05")
+        return self
 
 
 class SeriesResponseData(BaseModel):

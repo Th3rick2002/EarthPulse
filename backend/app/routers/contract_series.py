@@ -1,7 +1,8 @@
 """Series endpoint: GET /api/v1/series per contract."""
 
-from fastapi import APIRouter, HTTPException, Query, Request
-from datetime import date, datetime
+from calendar import monthrange
+from datetime import date, datetime, timezone
+from fastapi import APIRouter, HTTPException, Query
 from typing import Annotated
 import random
 
@@ -19,11 +20,12 @@ from app.schemas.contract import (
     TimeSeriesPointDTO,
     TrendAnalysisDTO,
     QualityValue,
+    ErrorResponse,
     generate_series_id,
     generate_analysis_id,
 )
 from app.services.analysis import compute_trend_analysis
-from app.services.providers import fetch_monthly_series
+from app.services.providers import ProviderError, fetch_monthly_series
 
 router = APIRouter(prefix="/api/v1", tags=["series"])
 
@@ -112,13 +114,23 @@ def _generate_mock_time_series(
     return points
 
 
-@router.get("/series", response_model=SeriesResponse)
+ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Invalid query parameters"},
+    404: {"model": ErrorResponse, "description": "Variable or region not found"},
+    422: {"model": ErrorResponse, "description": "Parameter validation failed"},
+    500: {"model": ErrorResponse, "description": "Internal server error"},
+    502: {"model": ErrorResponse, "description": "Provider request failed"},
+    503: {"model": ErrorResponse, "description": "Provider unavailable"},
+    504: {"model": ErrorResponse, "description": "Provider timeout"},
+}
+
+
+@router.get("/series", response_model=SeriesResponse, responses=ERROR_RESPONSES)
 async def get_series(
     variable_id: Annotated[str, Query(alias="variableId")],
     region_id: Annotated[str, Query(alias="regionId")],
     start_date: Annotated[date, Query(alias="startDate")],
     end_date: Annotated[date, Query(alias="endDate")],
-    request: Request,
 ):
     """
     Get monthly time series with trend analysis per contract.
@@ -130,7 +142,7 @@ async def get_series(
     if not variable:
         raise HTTPException(
             status_code=404,
-            detail={"code": "NOT_FOUND", "message": f"Variable '{variable_id}' not found", "details": {}, "requestId": "req-001"}
+            detail={"code": "NOT_FOUND", "message": f"Variable '{variable_id}' not found", "details": {}}
         )
 
     # Validate region exists
@@ -138,7 +150,7 @@ async def get_series(
     if not region:
         raise HTTPException(
             status_code=404,
-            detail={"code": "NOT_FOUND", "message": f"Region '{region_id}' not found", "details": {}, "requestId": "req-002"}
+            detail={"code": "NOT_FOUND", "message": f"Region '{region_id}' not found", "details": {}}
         )
 
     # Validate variable-region combination
@@ -146,35 +158,57 @@ async def get_series(
     if not valid:
         raise HTTPException(
             status_code=400,
-            detail={"code": "INVALID_PARAMS", "message": reason, "details": {}, "requestId": "req-003"}
+            detail={"code": "INVALID_PARAMS", "message": reason, "details": {}}
         )
 
-    # Validate date range
-    if start_date >= end_date:
+    # API date bounds are inclusive full months.
+    if (
+        start_date > end_date
+        or start_date.day != 1
+        or end_date.day != monthrange(end_date.year, end_date.month)[1]
+    ):
         raise HTTPException(
             status_code=400,
-            detail={"code": "INVALID_PARAMS", "message": "startDate must be before endDate", "details": {}, "requestId": "req-004"}
+            detail={
+                "code": "INVALID_PARAMS",
+                "message": "startDate and endDate must cover inclusive full months",
+                "details": {"startDate": start_date.isoformat(), "endDate": end_date.isoformat()},
+            },
         )
 
-    # Check minimum years for analysis
-    years_span = (end_date - start_date).days / 365.25
+    expected_months = (end_date.year - start_date.year) * 12 + end_date.month - start_date.month + 1
     min_years = variable.min_years
 
-    # Fetch time series (mock for now)
-    time_series = await fetch_monthly_series(
-        variable_id=variable_id,
-        region_id=region_id,
-        start_date=start_date,
-        end_date=end_date,
-    )
+    try:
+        time_series = await fetch_monthly_series(
+            variable_id=variable_id,
+            region_id=region_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except ProviderError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": str(exc), "details": {"provider": exc.provider}},
+        ) from exc
 
     # Convert to contract TimeSeriesPointDTO
     contract_time_series = []
     for point in time_series:
         # point has date, value, quality ("observed"/"interpolated"/"missing")
-        # Map quality to contract values
+        # Map provider quality to the canonical contract enum.
         quality_map = {"observed": "ok", "interpolated": "interpolated", "missing": "missing"}
-        contract_quality: QualityValue = quality_map.get(point.quality, "ok")
+        contract_quality = quality_map.get(point.quality)
+        if contract_quality is None:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "PROVIDER_ERROR",
+                    "message": "Provider returned an unsupported quality value",
+                    "details": {"quality": point.quality},
+                },
+            )
+        contract_quality: QualityValue
         contract_value = point.value if contract_quality != "missing" else None
         
         contract_time_series.append(TimeSeriesPointDTO(
@@ -189,10 +223,10 @@ async def get_series(
     # Determine if we have sufficient coverage for trend analysis
     ok_points = [p for p in contract_time_series if p.quality == "ok"]
     insufficient_reason = None
-    if years_span < min_years:
-        insufficient_reason = f"Time span ({years_span:.1f} years) less than minimum {min_years} years required for trend analysis"
-    elif len(ok_points) < min_years * 12 * 0.5:
-        insufficient_reason = f"Insufficient valid observations ({len(ok_points)}/{len(contract_time_series)}) for reliable analysis"
+    if expected_months < min_years * 12:
+        insufficient_reason = f"Time span ({expected_months / 12:.1f} years) less than minimum {min_years} years required for trend analysis"
+    elif len(ok_points) < expected_months * 0.5:
+        insufficient_reason = f"Insufficient valid observations ({len(ok_points)}/{expected_months}); at least 50% are required"
 
     # Compute trend analysis if sufficient coverage
     trend_analysis = None
@@ -215,11 +249,11 @@ async def get_series(
                     regionId=region_id,
                     startDate=start_date,
                     endDate=end_date,
-                    slope=analysis_result["slope"] * 12,  # Convert monthly to yearly
+                    slope=analysis_result["slope"],  # Analysis service returns units per calendar year.
                     pValue=analysis_result["p_value"],
                     significant=analysis_result["significant"],
                     interpretation=analysis_result["interpretation"],
-                    createdAt=datetime.utcnow(),
+                    createdAt=datetime.now(timezone.utc),
                 )
 
     # Build response per contract

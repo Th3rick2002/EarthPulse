@@ -120,7 +120,7 @@ REGIONS: dict[str, Region] = {
         name="Amazon Basin",
         description="Amazon rainforest extent for vegetation and precipitation monitoring.",
         type="predefined",
-        bbox=(-20.0, 5.0, -80.0, -50.0),  # lat_min, lat_max, lon_min, lon_max
+        bbox=(-20.0, 5.0, -80.0, -45.0),  # lat_min, lat_max, lon_min, lon_max
         crs="EPSG:4326",
         supported_variable_ids=["ndvi", "precipitation"],
     ),

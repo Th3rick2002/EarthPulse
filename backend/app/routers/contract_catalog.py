@@ -8,9 +8,13 @@ from app.schemas.contract import (
     VariableDTO,
     RegionDTO,
     BBoxDTO,
+    ErrorResponse,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["catalog"])
+INTERNAL_ERROR_RESPONSE = {
+    500: {"model": ErrorResponse, "description": "Internal server error"}
+}
 
 
 def _variable_to_dto(var) -> VariableDTO:
@@ -47,14 +51,14 @@ def _region_to_dto(region) -> RegionDTO:
     )
 
 
-@router.get("/variables", response_model=VariablesListResponse)
+@router.get("/variables", response_model=VariablesListResponse, responses=INTERNAL_ERROR_RESPONSE)
 async def get_variables():
     """List all available variables with metadata per contract."""
     variables = [_variable_to_dto(v) for v in list_variables()]
     return VariablesListResponse(data=variables)
 
 
-@router.get("/regions", response_model=RegionsListResponse)
+@router.get("/regions", response_model=RegionsListResponse, responses=INTERNAL_ERROR_RESPONSE)
 async def get_regions():
     """List all available regions with metadata per contract."""
     regions = [_region_to_dto(r) for r in list_regions()]

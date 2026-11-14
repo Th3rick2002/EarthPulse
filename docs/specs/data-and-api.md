@@ -7,7 +7,7 @@ Este documento define el contrato exacto entre frontend y backend. Los modelos P
 ### Convenciones globales
 
 - **Prefijo API**: `/api/v1`
-- **Envoltura de respuesta exitosa**: `{data: ...}`
+- **Envoltura de respuesta exitosa**: `{data: ...}`, excepto `/api/v1/health`, que devuelve directamente `HealthResponse`.
 - **Envoltura de error**: `{error: {code, message, details, requestId}}`
 - **Nomenclatura JSON**: camelCase
 - **Fechas**: ISO 8601 (`YYYY-MM-DD` para fechas, `date-time` para timestamps)
@@ -93,7 +93,7 @@ Este documento define el contrato exacto entre frontend y backend. Los modelos P
 | GET | `/api/v1/variables` | `{data: Variable[]}` |
 | GET | `/api/v1/regions` | `{data: Region[]}` |
 | GET | `/api/v1/series?variableId=...&regionId=...&startDate=...&endDate=...` | `{data: {variable: Variable, region: Region, timeSeries: TimeSeries[], trendAnalysis: TrendAnalysis|null}}` |
-| GET | `/api/v1/health` | `HealthResponse` |
+| GET | `/api/v1/health` | `HealthResponse` (sin envoltura `data`, excepción de health check) |
 
 ---
 
@@ -101,10 +101,15 @@ Este documento define el contrato exacto entre frontend y backend. Los modelos P
 
 | Código HTTP | Error code | Cuándo |
 |-------------|------------|--------|
-| 400 | `INVALID_PARAMS` | Fechas inválidas, bbox inválido, combinación variable-región no soportada, startDate ≥ endDate |
+| 400 | `INVALID_PARAMS` | Fechas que no cubren meses completos, bbox inválido, combinación variable-región no soportada, startDate > endDate |
 | 404 | `NOT_FOUND` | Variable o región no existe en catálogo |
 | 422 | `VALIDATION_ERROR` | Error de validación de parámetros (FastAPI) |
 | 500 | `INTERNAL_ERROR` | Error interno del servidor |
+| 502 | `PROVIDER_ERROR` | El proveedor respondió con error o devolvió datos inválidos |
+| 503 | `PROVIDER_UNAVAILABLE` | Integración no implementada o credenciales requeridas no configuradas |
+| 504 | `PROVIDER_TIMEOUT` | Tiempo de espera agotado al consultar el proveedor |
+
+Cada requestId es único por solicitud y también se devuelve en el encabezado HTTP `X-Request-ID`. El OpenAPI documenta los modelos de error para las rutas que pueden producirlos.
 
 ---
 
@@ -124,7 +129,7 @@ Este documento define el contrato exacto entre frontend y backend. Los modelos P
 
 | regionId | name | type | bbox (latMin, latMax, lonMin, lonMax) | Variables |
 |----------|------|------|----------------------------------------|-----------|
-| `amazon` | Amazon Basin | predefined | (-20.0, 5.0, -80.0, -50.0) | ndvi, precipitation |
+| `amazon` | Amazon Basin | predefined | (-20.0, 5.0, -80.0, -45.0) | ndvi, precipitation |
 | `arctic` | Arctic Circle | predefined | (66.5, 90.0, -180.0, 180.0) | air_temperature |
 
 > El bbox del Ártico usa rango longitudinal completo (-180, 180) para cruzar el antimeridiano.
@@ -158,7 +163,7 @@ Este documento define el contrato exacto entre frontend y backend. Los modelos P
     {
       "regionId": "amazon",
       "name": "Amazon Basin",
-      "bbox": {"latMin": -20.0, "latMax": 5.0, "lonMin": -80.0, "lonMax": -50.0},
+      "bbox": {"latMin": -20.0, "latMax": 5.0, "lonMin": -80.0, "lonMax": -45.0},
       "description": "Amazon rainforest extent for vegetation and precipitation monitoring.",
       "type": "predefined"
     },
@@ -187,7 +192,7 @@ Este documento define el contrato exacto entre frontend y backend. Los modelos P
       "pValue": 0.7743,
       "significant": false,
       "interpretation": "The monthly index shows a decreasing trend (-0.0010 index/year), which is not statistically significant (Mann-Kendall p = 0.7743). Note: significance does not imply causation.",
-      "createdAt": "2026-11-14T19:16:28.854059"
+      "createdAt": "2026-11-14T19:16:28.854059Z"
     }
   }
 }
@@ -212,7 +217,7 @@ Este documento define el contrato exacto entre frontend y backend. Los modelos P
     "code": "INVALID_PARAMS",
     "message": "Variable 'ndvi' not supported in region 'arctic'",
     "details": {},
-    "requestId": "req-003"
+    "requestId": "a-unique-request-id"
   }
 }
 ```
@@ -232,6 +237,7 @@ El contrato expone bbox como objeto `{latMin, latMax, lonMin, lonMax}` (WGS84/EP
 
 - **Método**: Mann-Kendall test + Sen's slope (Theil-Sen estimator)
 - **Significancia**: `p < 0.05`
-- **Pendiente**: Expresada en unidad de variable por año (convertida desde mensual × 12)
+- **Pendiente**: Pendiente de Sen calculada usando el tiempo calendario real entre observaciones, en unidad de variable por año. Los meses faltantes/interpolados no se incluyen ni comprimen artificialmente el intervalo temporal.
 - **Interpretación**: Texto en lenguaje natural indicando dirección, significancia y advertencia de causalidad
-- **Mínimo observaciones**: 3 puntos válidos (quality="ok") para ejecutar test; 5 años de cobertura para análisis válido
+- **Cobertura mínima**: Al menos `minYears` años completos y `quality="ok"` en al menos el 50% de los meses solicitados. Los puntos interpolados y missing no cuentan para el análisis.
+- **Mínimo observaciones**: 3 puntos válidos para ejecutar Mann-Kendall una vez cumplida la cobertura mínima.

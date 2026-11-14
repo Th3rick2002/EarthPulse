@@ -1,50 +1,23 @@
 # DONE
 
-## Backend MVP - Contrato canónico FE/BE (Dev 1)
+## Backend: contrato canónico FE/BE
 
-### ✅ [P0] Implementar modelos Pydantic y contrato OpenAPI
-- **Archivos nuevos**:
-  - `backend/app/schemas/contract.py` - DTOs exactos del contrato (VariableDTO, RegionDTO, BBoxDTO, TimeSeriesPointDTO, TrendAnalysisDTO, ErrorDetail, ErrorResponse, HealthResponse, wrappers)
-  - `backend/app/routers/contract_catalog.py` - GET /api/v1/variables, GET /api/v1/regions
-  - `backend/app/routers/contract_series.py` - GET /api/v1/series
-  - `backend/app/routers/health.py` - GET /api/v1/health
-- **Contrato implementado campo por campo**:
-  - Variable: `variableId`, `name`, `description`, `unit`, `source`, `category`, `minYears`
-  - Region: `regionId`, `name`, `bbox` (objeto con latMin/latMax/lonMin/lonMax), `description`, `type`
-  - TimeSeries: `seriesId`, `variableId`, `regionId`, `date`, `value` (nullable), `quality` ("ok"|"missing"|"interpolated")
-  - TrendAnalysis: `analysisId`, `variableId`, `regionId`, `startDate`, `endDate`, `slope` (unidad/año), `pValue`, `significant`, `interpretation`, `createdAt`
-  - ApiError: `error.{code,message,details,requestId}`
-- **Rutas**: `/api/v1/variables`, `/api/v1/regions`, `/api/v1/series`, `/api/v1/health`
-- **Envoltura**: `{data: ...}` en respuestas exitosas, `{error: ...}` en errores
-- **OpenAPI**: `/openapi.json` describe exactamente estos nombres y tipos
+- DTOs Pydantic y rutas `/api/v1/variables`, `/api/v1/regions`, `/api/v1/series` y `/api/v1/health`.
+- Contrato documentado en `docs/specs/data-and-api.md`, con envoltura `{data:...}` y excepción de health.
+- Catálogo MVP de variables y regiones en `backend/app/data/catalog.py`.
+- Series mensuales, calidades `ok`/`missing`/`interpolated` y análisis Mann-Kendall/Sen.
+- SQLite para desarrollo y estructura de repositorios existente.
 
-### ✅ [P0] Catálogo MVP de variables y regiones (actualizado a contrato)
-- **Archivo**: `backend/app/data/catalog.py` (fuente de verdad interna)
-- Variables: ndvi (PC MODIS), air_temperature (Meteomatics ERA5), precipitation (Meteomatics CHIRPS)
-- Regiones: amazon (NDVI/precip), arctic (air_temp) con bbox WGS84
-- Conversión bbox interna → contrato (objeto latMin/latMax/lonMin/lonMax)
+## Ajustes del contrato aplicados en esta rama
 
-### ✅ [P0] GET /api/v1/series con validación y análisis
-- **Request**: `variableId`, `regionId`, `startDate`, `endDate` (inclusivas, meses completos)
-- **Response**: `{data: {variable, region, timeSeries[], trendAnalysis|null}}`
-- **Validación**: 400 (fechas, combinación variable-región), 404 (catálogo inexistente)
-- **Cobertura < 5 años**: `trendAnalysis: null` (no inventa análisis)
-- **Análisis**: Mann-Kendall + Sen's slope (pymannkendall), p < 0.05, slope en unidad/año
+- Validación de bbox, fechas mensuales completas, relación entre `value` y `quality`, rango de `pValue` y consistencia de `significant`.
+- Error envelope uniforme para HTTP, validación y excepciones internas; `requestId` único también se expone como `X-Request-ID`.
+- OpenAPI declara respuestas de error de catálogo, series y health.
+- Criterio de análisis: requiere `minYears` y 50% de meses observados (`quality=ok`).
+- Fallos de proveedor: ausencia de credenciales, integraciones no implementadas, timeout o fallo producen 502/503/504 en vez de datos sintéticos.
+- Sen slope expresado por año calendario; fechas faltantes no comprimen el eje temporal.
+- Amazon bbox alineado con la especificación (`lonMax=-45`).
 
-### ✅ Servicios de análisis y proveedores
-- `backend/app/services/analysis.py`: Mann-Kendall + Sen's slope
-- `backend/app/services/providers.py`: Protocol + MeteomaticsClient, PlanetaryComputerClient, MockProvider (credenciales en `.env`)
+## Verificación de este cambio
 
-### ✅ Capa de repositorio
-- `backend/app/repositories/sqlite_repo.py`: SQLite para desarrollo
-- `backend/app/repositories/firestore_repo.py`: Interfaz Firestore para Cloud Run
-
-### ✅ Documentación actualizada
-- `docs/specs/data-and-api.md`: Contrato canónico completo con ejemplos JSON válido/insuficiente/error
-
-### Verificación
-- Todos los endpoints `/api/v1/*` responden correctamente (200, 400, 404, 500)
-- OpenAPI spec en `/openapi.json` genera tipos TypeScript sin mapeo de campos
-- Tests manuales pasados: ndvi/amazon, air_temperature/arctic, precipitation/amazon
-- Cobertura insuficiente → `trendAnalysis: null`
-- Errores devuelven formato `{error: {code, message, details, requestId}}`
+- Aún no se ejecutaron pruebas ni `git diff --check` para esta tanda.

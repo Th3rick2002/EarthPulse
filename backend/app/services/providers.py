@@ -3,6 +3,7 @@
 from datetime import date
 from typing import Protocol
 from dataclasses import dataclass
+import httpx
 from app.data.catalog import get_variable, get_region, bbox_to_provider_format
 
 
@@ -12,6 +13,16 @@ class MonthlyPoint:
     date: date
     value: float
     quality: str  # "observed", "interpolated", "missing"
+
+
+class ProviderError(Exception):
+    """Provider failure that can be translated to the public API error contract."""
+
+    def __init__(self, provider: str, code: str, status_code: int, message: str):
+        super().__init__(message)
+        self.provider = provider
+        self.code = code
+        self.status_code = status_code
 
 
 class DataProvider(Protocol):
@@ -161,7 +172,6 @@ class MockProvider:
 # Provider instances (singleton pattern)
 _meteomatics_client: MeteomaticsClient | None = None
 _planetary_computer_client: PlanetaryComputerClient | None = None
-_mock_provider = MockProvider()
 
 
 def get_meteomatics_client() -> MeteomaticsClient:
@@ -193,8 +203,8 @@ async def fetch_monthly_series(
     """
     Fetch monthly aggregated series for a variable/region.
 
-    Routes to appropriate provider based on variable source.
-    Falls back to mock provider if real client not configured.
+    Routes to the configured provider and surfaces failures instead of returning
+    synthetic observations as if they were real measurements.
     """
     variable = get_variable(variable_id)
     if not variable:
@@ -209,19 +219,62 @@ async def fetch_monthly_series(
 
     if provider == "meteomatics":
         client = get_meteomatics_client()
-        if client.username and client.password:
-            try:
-                return await client.fetch_monthly(variable_id, bbox, start_date, end_date)
-            except Exception:
-                pass
-        return await _mock_provider.fetch_monthly(variable_id, bbox, start_date, end_date)
+        if not client.username or not client.password:
+            raise ProviderError(
+                provider="meteomatics",
+                code="PROVIDER_UNAVAILABLE",
+                status_code=503,
+                message="Meteomatics credentials are not configured",
+            )
+        return await _fetch_from_provider(client, provider, variable_id, bbox, start_date, end_date)
 
     elif provider == "planetary-computer":
         client = get_planetary_computer_client()
-        try:
-            return await client.fetch_monthly(variable_id, bbox, start_date, end_date)
-        except Exception:
-            pass
-        return await _mock_provider.fetch_monthly(variable_id, bbox, start_date, end_date)
+        return await _fetch_from_provider(client, provider, variable_id, bbox, start_date, end_date)
 
-    return await _mock_provider.fetch_monthly(variable_id, bbox, start_date, end_date)
+    raise ProviderError(
+        provider=str(provider),
+        code="PROVIDER_UNAVAILABLE",
+        status_code=503,
+        message="No provider is configured for this variable",
+    )
+
+
+async def _fetch_from_provider(
+    client: DataProvider,
+    provider: str,
+    variable_id: str,
+    bbox: tuple[float, float, float, float],
+    start_date: date,
+    end_date: date,
+) -> list[MonthlyPoint]:
+    try:
+        return await client.fetch_monthly(variable_id, bbox, start_date, end_date)
+    except NotImplementedError as exc:
+        raise ProviderError(
+            provider=provider,
+            code="PROVIDER_UNAVAILABLE",
+            status_code=503,
+            message=f"The {provider} integration is not implemented yet",
+        ) from exc
+    except (httpx.TimeoutException, TimeoutError) as exc:
+        raise ProviderError(
+            provider=provider,
+            code="PROVIDER_TIMEOUT",
+            status_code=504,
+            message=f"The {provider} request timed out",
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise ProviderError(
+            provider=provider,
+            code="PROVIDER_ERROR",
+            status_code=502,
+            message=f"The {provider} request failed with status {exc.response.status_code}",
+        ) from exc
+    except Exception as exc:
+        raise ProviderError(
+            provider=provider,
+            code="PROVIDER_ERROR",
+            status_code=502,
+            message=f"The {provider} request failed",
+        ) from exc
