@@ -2,20 +2,28 @@
 
 ## Estado
 
-Documentación inicial de TrendScope preparada. El frontend contiene una plantilla Vite/React; `backend/` contiene un Dockerfile basado en Python 3.11 y dependencias iniciales en `requirements.txt`, pero todavía no tiene código de aplicación.
+Backend MVP implementado y funcional:
+- **Catálogo** (`GET /variables`, `GET /regions`): 3 variables (ndvi, air_temperature, precipitation) y 2 regiones (amazon, arctic) con metadatos completos
+- **Series** (`GET /series`): Endpoint completo con validación, datos mock mensuales, cobertura, y análisis Mann-Kendall
+- **Esquemas Pydantic**: Contratos definidos para request/response con validación de tipos
+- **Capa de repositorio**: SQLite para desarrollo local, interfaz Firestore para producción
+- **Clientes proveedores**: Esqueletos para Meteomatics y Planetary Computer (con fallback mock)
+- **Documentación**: `docs/specs/data-and-api.md` actualizado con esquemas finales y ejemplos
 
 ## Siguiente acción
 
-Dar acceso al Project privado a los otros dos devs y acordar con el equipo la primera variable/producto para el caso vertical. El Project ya está enlazado a `Th3rick2002/EarthPulse` y contiene diez tareas iniciales en estado Todo.
+1. **Dev 2 (Frontend)**: Integrar tipos TypeScript desde OpenAPI spec y consumir endpoints
+2. **Dev 3 (Integración)**: Confirmar acceso Meteomatics y validar CHIRPS habilitado en cuenta
+3. **Dev 1 (Backend)**: Implementar clientes reales Meteomatics/Planetary Computer cuando credenciales estén disponibles
 
 ## Hechos a tener presentes
 
 - `frontend/` usa pnpm; el lockfile existente es la fuente exacta de versiones.
-- Docker fija Python 3.11. El venv local encontrado fue creado con Python 3.14.9 y no define la versión del proyecto.
-- Persistencia recomendada para despliegue Cloud Run: Firestore para caché/metadatos; SQLite solo local/prototipo salvo que se añada almacenamiento persistente.
-- Microsoft Planetary Computer y Meteomatics son candidatos de integración; comprobar colección, unidades, historial, acceso y términos por variable.
+- Docker fija Python 3.11. El venv local usa Python 3.14.7 para desarrollo.
+- Persistencia: SQLite en `backend/data/trendscope.db` para desarrollo; Firestore para Cloud Run.
+- Microsoft Planetary Computer y Meteomatics son candidatos de integración; clientes listos para implementar.
 - Trabajar en archivos fuente, nunca en `backend/venv/` ni `frontend/node_modules/`.
-- El repositorio y el Project son privados; los colaboradores necesitan acceso al repositorio y al Project para ver/actualizar el tablero.
+- El repositorio y el Project son privados; los colaboradores necesitan acceso al repositorio y al Project.
 
 ## Documentos clave
 
