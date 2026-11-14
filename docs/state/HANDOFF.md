@@ -2,32 +2,28 @@
 
 ## Estado actual
 
-La rama backend `feat/backend-catalog-and-series` está integrándose con `dev` para resolver el PR #1. El contrato FE/BE vive en `docs/specs/data-and-api.md`; la especificación UI/UX del MVP está en `docs/specs/ui-ux.md` y las historias del equipo están en el GitHub Project.
+Backend PR #1 está integrado en `dev`. El contrato FE/BE y catálogo están en `docs/specs/data-and-api.md`; UI/UX en `docs/specs/ui-ux.md`; las tareas compartidas se siguen en el [GitHub Project](https://github.com/users/Th3rick2002/projects/4).
 
-- API canónica bajo `/api/v1`; Swagger UI `/docs`, OpenAPI `/openapi.json`.
-- Catálogo MVP: NDVI (Planetary Computer), temperatura (Meteomatics ERA5) y precipitación (Meteomatics CHIRPS), con Amazonía y Ártico.
-- Series mensuales con DTOs camelCase; tendencia Mann-Kendall/Sen con fechas mensuales completas, mínimo `minYears` y 50% de meses con `quality=ok`.
-- Errores usan envelope común, `requestId` único y cabecera `X-Request-ID`.
-- Proveedores reales siguen pendientes; el flujo no sustituye sus errores por datos mock.
-- `/api/v1/health` es la excepción exitosa al wrapper `{data:...}`.
+La rama `feat/frontend-explorer` está en rebase sobre `dev`. Se están resolviendo conflictos de documentación y alineando el frontend con el backend integrado.
+
+- API canónica `/api/v1`: `GET /variables`, `GET /regions`, `GET /series`; Swagger `/docs`.
+- Catálogo MVP: NDVI/amazon, temperatura del aire/Ártico, precipitación/amazon.
+- Los DTOs son camelCase; series mensuales; errores incluyen `requestId`.
+- El frontend consume el contrato con `src/services/api.ts`; los tipos aún son manuales.
+- El backend no publica las combinaciones válidas variable-región ni tiene `POST /regions`; el frontend debe filtrar pares del catálogo MVP y no ofrecer creación custom todavía.
+- Los proveedores siguen siendo esqueletos y pueden devolver 503 hasta integrar credenciales/adaptadores reales.
 
 ## Siguiente acción
 
-1. Finalizar la resolución del merge: revisar archivos, confirmar ausencia de marcadores, ejecutar `git diff --check` y actualizar estos documentos con el resultado.
-2. Confirmar el merge commit en `feat/backend-catalog-and-series` y subir la resolución al PR #1 en GitHub.
-3. Después, continuar integraciones reales y caché según las tareas del GitHub Project.
+1. Terminar el rebase de frontend y comprobar que no quedan conflictos.
+2. Revisar la UI contra el contrato integrado; ejecutar lint/build porque esta tarea pide verificar el frontend.
+3. Actualizar esta nota con el resultado y pendientes concretos.
 
-## Hechos de entorno
+## Entorno y documentos
 
-- `frontend/` usa pnpm y el lockfile fija versiones.
-- Docker fija Python 3.11; un venv local puede usar otra versión.
-- SQLite sirve para desarrollo; persistencia Firestore para despliegue requiere completar/validar su integración.
-- Credenciales Meteomatics se configuran en `backend/.env` o secretos del entorno; no se versionan.
-- Nunca editar `backend/venv/` ni `frontend/node_modules/`.
-
-## Documentos clave
-
+- `frontend/` usa pnpm; respetar `pnpm-lock.yaml`.
+- Backend fija Python 3.11 en Docker.
+- No versionar credenciales ni `.env`; no editar `frontend/node_modules/` o `backend/venv/`.
 - Reglas: `docs/rules/coding.md`, `docs/rules/domain.md`.
-- Especificaciones: `docs/specs/INDEX.md`, `docs/specs/data-and-api.md`, `docs/specs/ui-ux.md`.
-- Project: [TrendScope — MVP](https://github.com/users/Th3rick2002/projects/4).
-- Arranque: `frontend/README.md`, `backend/README.md`.
+- Contrato: `docs/specs/data-and-api.md`; UX: `docs/specs/ui-ux.md`.
+- Inicio: `frontend/README.md`, `backend/README.md`.

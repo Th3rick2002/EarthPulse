@@ -2,28 +2,26 @@
 
 ## Estructura y coordinación
 
-- Documentación de `/docs` y reglas compartidas.
-- Instrucciones de instalación y arranque en README de frontend y backend.
-- Creado el [GitHub Project TrendScope — MVP](https://github.com/users/Th3rick2002/projects/4) con historias separadas por Backend, Frontend e Infra.
-- Contrato HTTP FE/BE y decisiones UI/UX documentadas en `docs/specs/data-and-api.md` y `docs/specs/ui-ux.md`.
+- Documentación compartida en `/docs`, reglas y especificaciones del MVP.
+- GitHub Project con historias por Backend, Frontend e Infra.
+- Instrucciones de desarrollo para frontend y backend documentadas en sus README.
 
-## Backend: contrato canónico
+## Backend
 
-- DTOs Pydantic y rutas `/api/v1/variables`, `/api/v1/regions`, `/api/v1/series` y `/api/v1/health`.
-- Catálogo MVP de variables y regiones en `backend/app/data/catalog.py`.
-- Series mensuales, calidades `ok`/`missing`/`interpolated` y análisis Mann-Kendall/Sen.
-- Validaciones de bbox, fechas mensuales, relación entre `value` y `quality`, rango de p-value y consistencia de significancia.
-- Errores uniformes para HTTP, validación y excepciones internas; ID único en `requestId` y `X-Request-ID`.
-- Cobertura mínima: `minYears` y al menos 50% de meses solicitados con `quality=ok`.
-- Fallos de proveedor explícitos; no usar datos mock como sustituto silencioso.
-- Sen slope expresado por año calendario; Amazon bbox con `lonMax=-45`.
-- Swagger UI `/docs` y esquema OpenAPI `/openapi.json` provistos por FastAPI.
+- Integrado el PR #1 con DTOs canónicos y rutas `/api/v1/variables`, `/api/v1/regions`, `/api/v1/series` y `/api/v1/health`.
+- Validación de rangos mensuales, DTOs y errores comunes con `requestId`.
+- Cobertura de tendencia: mínimo `minYears`, tres observaciones y 50% de meses con calidad `ok`.
+- Fallos de proveedor explícitos; adaptadores Meteomatics y Planetary Computer siguen pendientes.
+- FastAPI publica Swagger en `/docs` y OpenAPI en `/openapi.json`.
 
-## Integración de ramas
+## Frontend
 
-- Al resolver el PR #1 se incorporan también `.env.example`, dependencias de Planetary Computer y la especificación UI/UX que ya estaban en `dev`.
-- La resolución conserva el contrato actualizado y las tareas pendientes de integración real.
+- Pantalla Explorador con consulta, globo 3D, gráfica, veredicto y estados de carga/error/sin datos.
+- Cliente HTTP único (`src/services/api.ts`) y modelos TypeScript provisionales (`src/types/api.ts`).
+- Compatibilidad de MVP limitada a NDVI/Amazonía, temperatura/Ártico y precipitación/Amazonía.
 
-## Verificación
+## Pendiente de verificación
 
-- No se ejecutaron pruebas en esta tanda de resolución de conflictos.
+- Terminar rebase de `feat/frontend-explorer` sobre `dev`.
+- Ejecutar lint y build después de los ajustes de compatibilidad.
+- Los tipos aún no se generan desde OpenAPI; `POST /api/v1/regions` y publicación de combinaciones válidas no están implementados.
