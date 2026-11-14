@@ -2,8 +2,16 @@
 
 from datetime import date
 from typing import Protocol
-from app.data.catalog import get_variable, bbox_to_provider_format
-from app.schemas.series import Observation
+from dataclasses import dataclass
+from app.data.catalog import get_variable, get_region, bbox_to_provider_format
+
+
+@dataclass
+class MonthlyPoint:
+    """Internal representation of a monthly data point."""
+    date: date
+    value: float
+    quality: str  # "observed", "interpolated", "missing"
 
 
 class DataProvider(Protocol):
@@ -15,7 +23,7 @@ class DataProvider(Protocol):
         region_bbox: tuple[float, float, float, float],
         start_date: date,
         end_date: date,
-    ) -> list[Observation]:
+    ) -> list[MonthlyPoint]:
         """Fetch monthly aggregated observations."""
         ...
 
@@ -45,7 +53,7 @@ class MeteomaticsClient:
         region_bbox: tuple[float, float, float, float],
         start_date: date,
         end_date: date,
-    ) -> list[Observation]:
+    ) -> list[MonthlyPoint]:
         """
         Fetch monthly data from Meteomatics.
 
@@ -69,7 +77,7 @@ class PlanetaryComputerClient:
         region_bbox: tuple[float, float, float, float],
         start_date: date,
         end_date: date,
-    ) -> list[Observation]:
+    ) -> list[MonthlyPoint]:
         """
         Fetch monthly data from Planetary Computer (MODIS NDVI).
 
@@ -96,11 +104,11 @@ class MockProvider:
         region_bbox: tuple[float, float, float, float],
         start_date: date,
         end_date: date,
-    ) -> list[Observation]:
+    ) -> list[MonthlyPoint]:
         """Generate synthetic monthly observations."""
         import random
 
-        observations = []
+        points = []
         current = date(start_date.year, start_date.month, 1)
 
         base_values = {
@@ -127,10 +135,19 @@ class MockProvider:
             elif variable_id == "precipitation":
                 value = max(0.0, value)
 
-            observations.append(Observation(
+            # Mostly "observed", occasionally "interpolated", rarely "missing"
+            quality_roll = random.random()
+            if quality_roll < 0.95:
+                quality = "observed"
+            elif quality_roll < 0.98:
+                quality = "interpolated"
+            else:
+                quality = "missing"
+
+            points.append(MonthlyPoint(
                 date=current,
                 value=round(value, 4),
-                quality="observed",
+                quality=quality,
             ))
 
             if current.month == 12:
@@ -138,7 +155,7 @@ class MockProvider:
             else:
                 current = date(current.year, current.month + 1, 1)
 
-        return observations
+        return points
 
 
 # Provider instances (singleton pattern)
@@ -172,7 +189,7 @@ async def fetch_monthly_series(
     region_id: str,
     start_date: date,
     end_date: date,
-) -> list[Observation]:
+) -> list[MonthlyPoint]:
     """
     Fetch monthly aggregated series for a variable/region.
 
@@ -184,8 +201,6 @@ async def fetch_monthly_series(
         raise ValueError(f"Variable {variable_id} not found")
 
     provider = variable.source.provider
-
-    from app.data.catalog import get_region
     region = get_region(region_id)
     if not region:
         raise ValueError(f"Region {region_id} not found")
@@ -194,12 +209,11 @@ async def fetch_monthly_series(
 
     if provider == "meteomatics":
         client = get_meteomatics_client()
-        # Check if credentials are configured
         if client.username and client.password:
             try:
                 return await client.fetch_monthly(variable_id, bbox, start_date, end_date)
             except Exception:
-                pass  # Fall through to mock
+                pass
         return await _mock_provider.fetch_monthly(variable_id, bbox, start_date, end_date)
 
     elif provider == "planetary-computer":
@@ -207,7 +221,7 @@ async def fetch_monthly_series(
         try:
             return await client.fetch_monthly(variable_id, bbox, start_date, end_date)
         except Exception:
-            pass  # Fall through to mock
+            pass
         return await _mock_provider.fetch_monthly(variable_id, bbox, start_date, end_date)
 
     return await _mock_provider.fetch_monthly(variable_id, bbox, start_date, end_date)

@@ -1,26 +1,39 @@
-"""Pydantic schemas for API contracts."""
+"""Pydantic schemas for API contracts - Contract version."""
 
-from .catalog import VariableResponse, RegionResponse
-from .series import (
-    SeriesRequest,
+from .contract import (
+    VariableDTO,
+    RegionDTO,
+    BBoxDTO,
+    TimeSeriesPointDTO,
+    TrendAnalysisDTO,
+    VariablesListResponse,
+    RegionsListResponse,
     SeriesResponse,
-    Observation,
-    Coverage,
-    Analysis,
-    SourceInfo,
-    VariableRef,
-    RegionRef,
+    SeriesResponseData,
+    HealthResponse,
+    ErrorResponse,
+    ErrorDetail,
+    QualityValue,
+    RegionType,
+    generate_series_id,
+    generate_analysis_id,
 )
 
 __all__ = [
-    "VariableResponse",
-    "RegionResponse",
-    "SeriesRequest",
+    "VariableDTO",
+    "RegionDTO",
+    "BBoxDTO",
+    "TimeSeriesPointDTO",
+    "TrendAnalysisDTO",
+    "VariablesListResponse",
+    "RegionsListResponse",
     "SeriesResponse",
-    "Observation",
-    "Coverage",
-    "Analysis",
-    "SourceInfo",
-    "VariableRef",
-    "RegionRef",
+    "SeriesResponseData",
+    "HealthResponse",
+    "ErrorResponse",
+    "ErrorDetail",
+    "QualityValue",
+    "RegionType",
+    "generate_series_id",
+    "generate_analysis_id",
 ]
