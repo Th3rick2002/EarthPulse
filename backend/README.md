@@ -34,7 +34,7 @@ Desde `backend/`, crea el archivo de configuración y edita las credenciales:
 cp .env.example .env
 ```
 
-La integración consulta la temperatura ERA5 y la precipitación CHIRPS como estadísticas diarias del polígono de la región y las agrega por mes. La cuenta debe tener habilitados los productos históricos `ecmwf-era5` y `chc-chirps3`; el producto también se puede cambiar con `METEOMATICS_TEMPERATURE_SOURCE` y `METEOMATICS_PRECIPITATION_SOURCE`.
+La integración consulta la temperatura ERA5 y la precipitación CHIRPS como estadísticas diarias del polígono de la región y las agrega por mes. La cuenta debe tener habilitados los productos históricos `ecmwf-era5` y `chc-chirps3`; el producto también se puede cambiar con `METEOMATICS_TEMPERATURE_SOURCE` y `METEOMATICS_PRECIPITATION_SOURCE`. `GET /api/v1/availability?variableId=precipitation` devuelve cobertura vigente de lluvia, cacheada durante seis horas; el backend y el selector validan los meses contra ese límite.
 
 NDVI consulta la colección STAC `modis-13Q1-061`, selecciona por tile el compuesto de 16 días más próximo a mitad de cada mes, filtra píxeles con confiabilidad MODIS igual a 0 y aplica escala `0.0001`. No requiere credenciales. Como puede tomar más tiempo que una petición HTTP, se ejecuta en segundo plano y el cliente consulta el job hasta que termina.
 

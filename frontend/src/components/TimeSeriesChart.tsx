@@ -19,10 +19,13 @@ interface Props {
 
 export default function TimeSeriesChart({ points, unit, variableName, areaName }: Props) {
   const chartTitleId = useId()
-  const data = points.map((p) => ({
+  const allData = points.map((p) => ({
     date: formatMonth(p.date),
     value: p.quality === 'missing' ? null : p.value,
   }))
+  const firstObserved = allData.findIndex((point) => point.value !== null)
+  const lastObserved = allData.findLastIndex((point) => point.value !== null)
+  const data = firstObserved >= 0 ? allData.slice(firstObserved, lastObserved + 1) : allData
 
   return (
     <section className="card chart-card" aria-labelledby={chartTitleId}>
@@ -41,6 +44,7 @@ export default function TimeSeriesChart({ points, unit, variableName, areaName }
             <YAxis
               width={64}
               tick={{ fontSize: 12 }}
+              tickFormatter={(value: number) => value.toLocaleString('es-SV', { maximumSignificantDigits: 4 })}
               label={{
                 value: unit,
                 angle: -90,
@@ -50,7 +54,7 @@ export default function TimeSeriesChart({ points, unit, variableName, areaName }
             />
             <Tooltip
               formatter={(v) =>
-                typeof v === 'number' ? `${v.toFixed(3)} ${unit}` : 'sin dato'
+                typeof v === 'number' ? `${v.toLocaleString('es-SV', { maximumSignificantDigits: 4 })} ${unit}` : 'sin dato'
               }
               labelFormatter={(l) => `Mes: ${String(l)}`}
             />
@@ -67,7 +71,7 @@ export default function TimeSeriesChart({ points, unit, variableName, areaName }
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="caption">Un espacio en la línea significa que no encontramos datos para ese mes. El eje vertical muestra {unit}.</p>
+      <p className="caption">La gráfica empieza en el primer mes con datos. Un espacio en la línea significa que no encontramos datos para ese mes. El eje vertical muestra {unit}.</p>
     </section>
   )
 }

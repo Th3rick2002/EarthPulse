@@ -21,15 +21,18 @@ export default function VerdictCard({ trend, variable, observed, interpolated, t
       : variable.variableId === 'precipitation'
         ? 'La lluvia'
         : variable.name
-  const unit = variable.unit === 'index' ? 'índice' : variable.unit
+  const unit = variable.unit === 'index' ? (variable.variableId === 'ndvi' ? 'índice NDVI' : 'índice') : variable.unit
+  const title = trend?.significant
+    ? `${subject} ${direction}`
+    : trend
+      ? `Sin señal clara de cambio en ${subject.toLocaleLowerCase('es-SV')}`
+      : 'Aún no hay suficientes datos para descubrir una tendencia'
 
   return (
-    <section className={`card verdict ${trend?.significant ? 'ok' : trend ? 'warn' : 'neutral'}`} aria-labelledby="verdict-title">
+    <section className={`card verdict ${trend?.significant ? 'ok' : 'neutral'}`} aria-labelledby="verdict-title">
       <span className="eyebrow">LO QUE NOS CUENTAN LOS DATOS</span>
       <h2 id="verdict-title">
-        {trend
-          ? `${subject} ${direction}`
-          : 'Aún no hay suficientes datos para descubrir una tendencia'}
+        {title}
       </h2>
       {trend ? (
         <>
@@ -52,7 +55,7 @@ export default function VerdictCard({ trend, variable, observed, interpolated, t
             </p>
             <dl className="verdict-stats">
               <div><dt>Periodo</dt><dd>{formatDate(trend.startDate)} a {formatDate(trend.endDate)}</dd></div>
-              <div><dt>Meses con datos</dt><dd>{observed} de {total} ({coverage}%)</dd></div>
+              <div><dt>Meses con datos</dt><dd>{observed} de {total} meses con observaciones válidas ({coverage}%)</dd></div>
               {interpolated > 0 && <div><dt>Meses estimados</dt><dd>{interpolated}</dd></div>}
               <div><dt>Prueba</dt><dd>Mann-Kendall</dd></div>
             </dl>

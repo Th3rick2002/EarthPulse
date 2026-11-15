@@ -1,10 +1,21 @@
 import { useState } from 'react'
-import { CircleMarker, MapContainer, Rectangle, TileLayer, Tooltip, useMapEvents } from 'react-leaflet'
+import { CircleMarker, MapContainer, Rectangle, TileLayer, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
 import type { LatLngTuple } from 'leaflet'
 import type { BBox, SelectedArea } from '../types/api'
 
 const MAX_AREAS = 4
 const COLORS = ['#6b45a2', '#167c70', '#c26d28', '#2674a8']
+
+function AccessibleZoomControl() {
+  const map = useMap()
+  const [atMinimumZoom, setAtMinimumZoom] = useState(map.getZoom() <= map.getMinZoom())
+  useMapEvents({
+    zoomend() {
+      setAtMinimumZoom(map.getZoom() <= map.getMinZoom())
+    },
+  })
+  return <ZoomControl zoomInTitle="Acercar el mapa" zoomOutTitle={atMinimumZoom ? 'Ya estás en el máximo alejamiento' : 'Alejar el mapa'} />
+}
 
 interface Props {
   areas: SelectedArea[]
@@ -96,7 +107,7 @@ export default function RegionMap({ areas, onAddArea, onRemoveArea, onRenameArea
       <p className="map-instructions" role={drawing ? 'status' : undefined}>
         {drawing
           ? 'Haz clic en dos esquinas opuestas del mapa para marcar un rectángulo.'
-          : `Agrega hasta ${MAX_AREAS} zonas y compararemos cada una por separado. Acércate al mapa para elegir un área pequeña.`}
+          : `Agrega hasta ${MAX_AREAS} zonas para que la comparación sea clara y ágil. Revisamos cada una por separado; acércate al mapa para elegir un área pequeña.`}
       </p>
       <div className={`leaflet-map-shell${drawing ? ' is-drawing' : ''}`}>
         <MapContainer
@@ -106,8 +117,10 @@ export default function RegionMap({ areas, onAddArea, onRemoveArea, onRenameArea
           maxZoom={14}
           scrollWheelZoom
           worldCopyJump
+          zoomControl={false}
           aria-label="Mapa para seleccionar las zonas que quieres comparar"
         >
+          <AccessibleZoomControl />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -122,35 +135,55 @@ export default function RegionMap({ areas, onAddArea, onRemoveArea, onRenameArea
               <Tooltip sticky>{area.name}</Tooltip>
             </Rectangle>
           ))}
+          {areas.length === 0 && !drawing && (
+            <Rectangle
+              bounds={[[12, -28], [18, -22]]}
+              pathOptions={{ color: '#287d71', weight: 2, dashArray: '6 6', fillColor: '#287d71', fillOpacity: 0.08, interactive: false }}
+            ><Tooltip permanent direction="center">Así se verá tu zona</Tooltip></Rectangle>
+          )}
           <RectangleDrawer key={drawing ? 'draw-on' : 'draw-off'} enabled={drawing && !disabled} onComplete={completeRectangle} />
         </MapContainer>
       </div>
       <p className="map-caption">Mapa © OpenStreetMap contributors. La selección es rectangular y cada resultado representa el promedio de toda su zona.</p>
       {drawError && <p className="form-error" role="alert">{drawError}</p>}
       {areas.length > 0 ? (
-        <div className="area-list" aria-label="Zonas elegidas">
+        <ul className="area-list" aria-label="Zonas elegidas">
           {areas.map((area, index) => (
-            <div className="area-item" key={area.areaId}>
+            <li className="area-item" key={area.areaId}>
               <span className="area-swatch" style={{ backgroundColor: COLORS[index % COLORS.length] }} aria-hidden="true" />
-              <label className="sr-only" htmlFor={`area-name-${area.areaId}`}>Nombre de la zona {index + 1}</label>
-              <input
-                id={`area-name-${area.areaId}`}
-                value={area.name}
-                maxLength={80}
-                onChange={(event) => onRenameArea(area.areaId, event.target.value)}
-                disabled={disabled}
-                aria-label={`Nombre de la zona ${index + 1}`}
-              />
-              <span className="area-coordinates">{area.bbox.latMin.toFixed(1)}°–{area.bbox.latMax.toFixed(1)}° lat.</span>
-              <button type="button" className="remove-area" onClick={() => onRemoveArea(area.areaId)} disabled={disabled} aria-label={`Quitar ${area.name}`}>
-                Quitar
+              <div className="area-details">
+                <label htmlFor={`area-name-${area.areaId}`}>Nombre de la zona {index + 1}</label>
+                <input
+                  id={`area-name-${area.areaId}`}
+                  value={area.name}
+                  maxLength={80}
+                  onChange={(event) => onRenameArea(area.areaId, event.target.value)}
+                  disabled={disabled}
+                />
+                <div className="area-coordinate-block">
+                  <span className="area-coordinate-label">Coordenadas</span>
+                  <span className="area-coordinates">{formatBBox(area.bbox)}</span>
+                </div>
+              </div>
+              <button type="button" className="remove-area" onClick={() => onRemoveArea(area.areaId)} disabled={disabled} aria-label={`Quitar ${area.name}`} title={`Quitar ${area.name}`}>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="m6 6 12 12M18 6 6 18" />
+                </svg>
               </button>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : (
         <p className="empty-areas">Aún no has marcado ninguna zona. Empieza dibujando un rectángulo en el mapa.</p>
       )}
     </section>
   )
+}
+
+function formatCoordinate(value: number) {
+  return value.toLocaleString('es-SV', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+}
+
+function formatBBox(bbox: BBox) {
+  return `${formatCoordinate(bbox.latMin)}°–${formatCoordinate(bbox.latMax)}° lat. · ${formatCoordinate(bbox.lonMin)}°–${formatCoordinate(bbox.lonMax)}° lon.`
 }

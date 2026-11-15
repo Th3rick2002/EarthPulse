@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import QueryPanel from '../components/QueryPanel'
 import VerdictCard from '../components/VerdictCard'
 import { ApiError, asApiError, compareAreas, getVariables } from '../services/api'
@@ -31,6 +31,12 @@ function ErrorBox({
       <h2>{title}</h2>
       <p>{error.message}</p>
       {error.requestId && <p className="caption">ID de solicitud: {error.requestId}</p>}
+      {error.diagnostic && (
+        <details className="technical-details">
+          <summary>Ver detalle técnico</summary>
+          <p>{error.diagnostic}</p>
+        </details>
+      )}
       <button className="btn secondary" type="button" onClick={onRetry}>Intentar de nuevo</button>
     </div>
   )
@@ -42,6 +48,7 @@ export default function Explorer() {
   const [view, setView] = useState<View>({ kind: 'idle' })
   const [areas, setAreas] = useState<CompareSeriesQuery['areas']>([])
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const modalRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -62,6 +69,14 @@ export default function Explorer() {
     const timer = window.setInterval(update, 1000)
     return () => window.clearInterval(timer)
   }, [view])
+
+  useEffect(() => {
+    if (view.kind !== 'loading') return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    modalRef.current?.focus()
+    return () => { document.body.style.overflow = previousOverflow }
+  }, [view.kind])
 
   function retryCatalog() {
     setCatalog({ status: 'loading' })
@@ -111,26 +126,38 @@ export default function Explorer() {
             <p>Después de dibujar las zonas y elegir un periodo, te mostraremos los datos de cada una por separado.</p>
           </div>
         )}
-        {view.kind === 'loading' && (
-          <div className="card progress-card" role="status">
-            <span className="loading-orbit" aria-hidden="true">🌎</span>
-            <div>
-              <span className="eyebrow">COMPARACIÓN EN CURSO</span>
-              <h2>Buscando datos para {view.query.areas.length} {view.query.areas.length === 1 ? 'zona' : 'zonas'}</h2>
-              <p><strong>{friendlyVariable(view.query.variableId)}</strong> · {formatDate(view.query.startDate)} a {formatDate(view.query.endDate)}</p>
-              <p className="area-names-loading">{view.query.areas.map((area) => area.name).join(' · ')}</p>
-              <p>Estamos reuniendo mediciones científicas para cada zona. Después compararemos los meses para buscar patrones.</p>
-              <p className="progress-time">Tiempo transcurrido: {formatElapsed(elapsedSeconds)}</p>
-              <p className="field-help">Las consultas largas pueden tardar un poco. Puedes esperar aquí; no hace falta volver a pulsar.</p>
-              <div className="progress-track" aria-hidden="true"><span /></div>
-            </div>
-          </div>
-        )}
         {view.kind === 'error' && (
           <ErrorBox title="No pudimos completar la comparación" error={view.error} onRetry={() => runQuery(view.query)} />
         )}
         {view.kind === 'ready' && <ComparisonResults results={view.results} query={view.query} />}
       </div>
+      {view.kind === 'loading' && (
+        <div className="query-modal-backdrop">
+          <section
+            className="query-modal card"
+            ref={modalRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="query-progress-title"
+            aria-describedby="query-progress-description"
+            aria-live="polite"
+            onKeyDown={(event) => {
+              if (event.key === 'Tab') event.preventDefault()
+            }}
+          >
+            <span className="loading-orbit" aria-hidden="true">🌎</span>
+            <span className="eyebrow">COMPARACIÓN EN CURSO</span>
+            <h2 id="query-progress-title">Buscando datos para {view.query.areas.length} {view.query.areas.length === 1 ? 'zona' : 'zonas'}</h2>
+            <p><strong>{friendlyVariable(view.query.variableId)}</strong> · {formatDate(view.query.startDate)} a {formatDate(view.query.endDate)}</p>
+            <p className="area-names-loading">{view.query.areas.map((area) => area.name).join(' · ')}</p>
+            <p id="query-progress-description">Reunimos mediciones científicas para cada zona y luego comparamos los meses para buscar patrones.</p>
+            <p className="progress-time">Tiempo transcurrido: {formatElapsed(elapsedSeconds)}</p>
+            <p className="field-help">Las consultas largas pueden tardar un poco. Puedes esperar aquí; no hace falta volver a pulsar.</p>
+            <div className="progress-track" aria-hidden="true"><span /></div>
+          </section>
+        </div>
+      )}
     </>
   )
 }
@@ -217,15 +244,16 @@ function DataAside({ results, query }: { results: AreaSeriesResult[]; query: Com
 }
 
 function formatBBox(bbox: AreaSeriesResult['series']['region']['bbox']) {
-  return `${bbox.latMin.toFixed(1)}°–${bbox.latMax.toFixed(1)}° lat. · ${bbox.lonMin.toFixed(1)}°–${bbox.lonMax.toFixed(1)}° lon.`
+  const coordinate = (value: number) => value.toLocaleString('es-SV', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+  return `${coordinate(bbox.latMin)}°–${coordinate(bbox.latMax)}° lat. · ${coordinate(bbox.lonMin)}°–${coordinate(bbox.lonMax)}° lon.`
 }
 
 function friendlyVariable(id: string) {
-  return ({ ndvi: 'vegetación', air_temperature: 'temperatura del aire', precipitation: 'lluvia' } as Record<string, string>)[id] ?? id
+  return ({ ndvi: 'Vegetación (NDVI)', air_temperature: 'Temperatura del aire', precipitation: 'Lluvia' } as Record<string, string>)[id] ?? id
 }
 
 function friendlyUnit(unit: string) {
-  return unit === 'index' ? 'índice' : unit
+  return unit === 'index' ? 'índice NDVI' : unit
 }
 
 function friendlySource(source: string) {

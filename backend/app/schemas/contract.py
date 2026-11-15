@@ -59,6 +59,15 @@ class VariableDTO(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
 
+class VariableAvailabilityDTO(BaseModel):
+    """Date bounds exposed by a live data source."""
+    variableId: str
+    availableStartDate: date
+    availableEndDate: date
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+
 class BBoxDTO(BaseModel):
     """Bounding box as object per contract."""
     latMin: float = Field(ge=-90, le=90)

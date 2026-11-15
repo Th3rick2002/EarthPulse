@@ -10,6 +10,12 @@ export interface Variable {
   minYears: number
 }
 
+export interface VariableAvailability {
+  variableId: string
+  availableStartDate: string
+  availableEndDate: string
+}
+
 export interface BBox {
   latMin: number
   latMax: number

@@ -47,3 +47,13 @@
 - `scripts/dev-docker-backend.sh` inicia el backend en Docker y el frontend con Vite local.
 - `scripts/README.md` documenta uso y requisitos.
 - Script local probado con `/api/v1/health`, `/api/v1/variables` y Vite; Docker no está instalado en este entorno para probar el segundo script.
+
+## Revisión de usabilidad y marca — 2026-11-15
+
+- Se corrigió el veredicto para que solo afirme una dirección cuando la tendencia es significativa; los casos sin señal clara usan estilo neutro.
+- La interfaz identifica NDVI, muestra su rango documentado (−1 a 1) y corrige la frase duplicada del selector.
+- Se corrigió “1 año seleccionado”, se aclaró la cobertura de observaciones y se unificó el formato decimal español en valores y coordenadas.
+- La gráfica omite periodos vacíos en sus extremos y conserva los huecos internos con una explicación; el mapa muestra un rectángulo de ejemplo, explica el máximo de cuatro zonas y etiqueta el zoom.
+- La marca visible y el título de la pestaña ahora dicen EarthPulse. Se vinculó el mensaje de validación con el botón de consulta para tecnologías de asistencia.
+- La lista de zonas del mapa se rediseñó como tarjetas responsivas, con nombre editable, coordenadas completas y botón de quitar mediante icono accesible.
+- El control de quitar usa una X discreta sin fondo en la esquina superior derecha de cada tarjeta.

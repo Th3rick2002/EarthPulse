@@ -40,6 +40,7 @@ Los modelos Pydantic en `backend/app/schemas/contract.py` y OpenAPI (`/openapi.j
 | Método y ruta | Respuesta exitosa |
 |---|---|
 | `GET /api/v1/variables` | `{data: Variable[]}` |
+| `GET /api/v1/availability?variableId=precipitation` | Cobertura actual CHIRPS, `{data: {variableId, availableStartDate, availableEndDate}}`. |
 | `GET /api/v1/regions` | `{data: Region[]}` |
 | `GET /api/v1/series?variableId=…&regionId=…&startDate=…&endDate=…` | `{data: {variable, region, timeSeries[], trendAnalysis}}` |
 | `GET /api/v1/series` para Planetary Computer | `202 {data: {jobId, status: "processing"}}`; consultar `GET /api/v1/series/jobs/{jobId}` hasta recibir `200` con la misma respuesta de series |
@@ -47,6 +48,8 @@ Los modelos Pydantic en `backend/app/schemas/contract.py` y OpenAPI (`/openapi.j
 | `GET /api/v1/health` | `HealthResponse` directa, sin wrapper `data` |
 
 `POST /api/v1/series/compare` recibe `variableId`, `startDate`, `endDate` y `areas: [{areaId, name, bbox}]`. Cada bbox debe ser un rectángulo WGS84 de hasta 35° de ancho por 25° de alto; se procesan como máximo cuatro por tanda y cada zona obtiene su propia serie y tendencia. Las áreas son temporales a la consulta; no se guardan como regiones del catálogo.
+
+La disponibilidad de lluvia se consulta con `GET /api/v1/availability?variableId=precipitation`; el backend cachea el resultado seis horas. Las rutas de series vuelven a validar las fechas contra la cobertura antes de consultar Meteomatics. CHIRPS entrega acumulaciones diarias con fecha en el límite derecho, así que el último día seleccionable se calcula restando un día al `max_date` del proveedor. El frontend limita el selector al último mes completo disponible.
 
 ### Códigos de error
 

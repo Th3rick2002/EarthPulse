@@ -7,7 +7,7 @@ function App() {
       <a className="skip-link" href="#main-content">Saltar al contenido</a>
       <header className="topbar">
         <span className="brand-mark" aria-hidden="true">🌎</span>
-        <strong>TrendScope</strong>
+        <strong>EarthPulse</strong>
         <span>Explorador de la Tierra</span>
       </header>
       <main className="page" id="main-content">

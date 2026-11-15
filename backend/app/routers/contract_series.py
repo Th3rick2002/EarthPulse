@@ -27,14 +27,65 @@ from app.schemas.contract import (
     QualityValue,
     ErrorResponse,
     CompareSeriesRequest,
+    VariableAvailabilityDTO,
     generate_series_id,
     generate_analysis_id,
 )
 from app.services.analysis import compute_trend_analysis
-from app.services.providers import ProviderError, fetch_monthly_series
+from app.services.providers import ProviderError, fetch_monthly_series, get_variable_available_dates
 from app.services.series_jobs import get_or_start_series_job, get_series_job
 
 router = APIRouter(prefix="/api/v1", tags=["series"])
+
+
+@router.get("/availability")
+async def get_variable_availability(variable_id: Annotated[str, Query(alias="variableId")]):
+    """Return current complete date coverage for a variable's live provider."""
+    variable = get_variable(variable_id)
+    if variable is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": f"Variable '{variable_id}' not found", "details": {}},
+        )
+    if variable_id != "precipitation":
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_PARAMS", "message": "Live availability is not exposed for this variable", "details": {}},
+        )
+    try:
+        available_start, available_end = await get_variable_available_dates(variable_id)
+    except ProviderError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": str(exc), "details": _provider_error_details(exc)},
+        ) from exc
+    result = VariableAvailabilityDTO(
+        variableId=variable_id,
+        availableStartDate=available_start,
+        availableEndDate=available_end,
+    )
+    return {"data": result.model_dump(mode="json", by_alias=True)}
+
+
+async def _validate_provider_coverage(variable_id: str, start_date: date, end_date: date) -> None:
+    if variable_id != "precipitation":
+        return
+    try:
+        available_start, available_end = await get_variable_available_dates(variable_id)
+    except ProviderError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": str(exc), "details": _provider_error_details(exc)},
+        ) from exc
+    if start_date > available_end or end_date > available_end or start_date < available_start:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "INVALID_PARAMS",
+                "message": "The selected period is outside the provider's available precipitation dates",
+                "details": {"availableStartDate": available_start.isoformat(), "availableEndDate": available_end.isoformat()},
+            },
+        )
 
 
 def _variable_to_dto(var) -> VariableDTO:
@@ -201,6 +252,7 @@ async def get_series(
         )
 
     _validate_period(start_date, end_date)
+    await _validate_provider_coverage(variable_id, start_date, end_date)
     cache_repo = request.app.state.cache_repo
     cache_key = _series_cache_key(variable_id, region.bbox, start_date, end_date)
     cached_response = await cache_repo.get_response(cache_key)
@@ -240,7 +292,7 @@ async def get_series(
     except ProviderError as exc:
         raise HTTPException(
             status_code=exc.status_code,
-            detail={"code": exc.code, "message": str(exc), "details": {"provider": exc.provider}},
+            detail={"code": exc.code, "message": str(exc), "details": _provider_error_details(exc)},
         ) from exc
 
     result = _build_series_response(
@@ -260,6 +312,7 @@ async def compare_areas(body: CompareSeriesRequest, request: Request, response: 
             detail={"code": "NOT_FOUND", "message": f"Variable '{body.variableId}' not found", "details": {}},
         )
     _validate_period(body.startDate, body.endDate)
+    await _validate_provider_coverage(body.variableId, body.startDate, body.endDate)
 
     cache_repo = request.app.state.cache_repo
     areas = []
@@ -394,12 +447,21 @@ def _raise_job_error(error: Exception | None) -> None:
     if isinstance(error, ProviderError):
         raise HTTPException(
             status_code=error.status_code,
-            detail={"code": error.code, "message": str(error), "details": {"provider": error.provider}},
+            detail={"code": error.code, "message": str(error), "details": _provider_error_details(error)},
         ) from error
     raise HTTPException(
         status_code=502,
         detail={"code": "PROVIDER_ERROR", "message": "The planetary-computer request failed", "details": {}},
     )
+
+
+def _provider_error_details(error: ProviderError) -> dict:
+    details = {"provider": error.provider}
+    if error.upstream_status is not None:
+        details["upstreamStatus"] = error.upstream_status
+    if error.upstream_message:
+        details["upstreamMessage"] = error.upstream_message
+    return details
 
 
 def _build_series_response(variable_id, region_id, start_date, end_date, time_series, region_override: RegionDTO | None = None):

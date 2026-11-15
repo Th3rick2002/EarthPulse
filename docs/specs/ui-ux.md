@@ -15,7 +15,7 @@ Guiar a niñas, niños y personas adultas desde una pregunta sobre la Tierra has
 
 ## Estructura de la pantalla
 
-1. **Encabezado:** marca TrendScope y nombre “Explorador de la Tierra”; enlace para saltar al contenido.
+1. **Encabezado:** marca EarthPulse y nombre “Explorador de la Tierra”; enlace para saltar al contenido.
 2. **Introducción:** explica que la plataforma compara mediciones de la Tierra para buscar patrones.
 3. **Consulta guiada:** “¿Qué quieres explorar?”, “¿Qué periodo quieres comparar?” y “¿Qué lugares quieres comparar?”.
 4. **Mapa Leaflet:** teselas OpenStreetMap con atribución visible; permite dibujar hasta cuatro rectángulos independientes.
@@ -34,7 +34,7 @@ En escritorio, los resultados ocupan la columna principal y la ficha de consulta
 ## Mapa y zonas
 
 - Leaflet proporciona navegación y zoom táctil sobre teselas OpenStreetMap. La atribución requerida permanece visible.
-- Se dibujan rectángulos con dos clics/toques en esquinas opuestas. Cada zona se puede nombrar y quitar; máximo cuatro por consulta.
+- Se dibujan rectángulos con dos clics/toques en esquinas opuestas. Cada zona aparece en una tarjeta independiente con nombre editable, coordenadas completas y una X discreta, sin fondo, en la esquina superior derecha para quitarla; máximo cuatro por consulta.
 - Cada rectángulo puede medir hasta 35° de ancho por 25° de alto para mantener manejable el costo de datos. El backend vuelve a validar este límite.
 - El mapa muestra el área consultada, no valores dentro de ella. Cada punto de la gráfica resume el rectángulo completo.
 - Las zonas son temporales a la consulta; no se agregan automáticamente al catálogo ni se guardan en la base de regiones.

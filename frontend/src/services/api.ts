@@ -6,6 +6,7 @@ import type {
   Region,
   SeriesData,
   SeriesQuery,
+  VariableAvailability,
   Variable,
 } from '../types/api'
 
@@ -20,18 +21,21 @@ export class ApiError extends Error {
   code: string
   status: number | null
   requestId?: string
+  diagnostic?: string
 
   constructor(
     message: string,
     code: string,
     status: number | null,
     requestId?: string,
+    diagnostic?: string,
   ) {
     super(message)
     this.name = 'ApiError'
     this.code = code
     this.status = status
     this.requestId = requestId
+    this.diagnostic = diagnostic
   }
 }
 
@@ -45,6 +49,7 @@ export function asApiError(e: unknown): ApiError {
         body.code,
         e.response?.status ?? null,
         body.requestId,
+        diagnosticMessage(body.details),
       )
     }
     if (e.code === 'ECONNABORTED') {
@@ -70,6 +75,17 @@ export function asApiError(e: unknown): ApiError {
   return new ApiError('Ocurrió un error inesperado.', 'UNKNOWN', null)
 }
 
+function diagnosticMessage(details?: Record<string, unknown>): string | undefined {
+  const message = details?.upstreamMessage
+  const status = details?.upstreamStatus
+  const availableEndDate = details?.availableEndDate
+  if (typeof message === 'string') {
+    return typeof status === 'number' ? `Meteomatics respondió ${status}: ${message}` : message
+  }
+  if (typeof availableEndDate === 'string') return `Datos disponibles hasta ${availableEndDate}.`
+  return undefined
+}
+
 function translateError(code: string, message: string) {
   if (code === 'PROVIDER_TIMEOUT' || /request timed out/i.test(message)) {
     return 'La fuente de datos tardó demasiado en responder. Puedes intentarlo de nuevo.'
@@ -87,9 +103,23 @@ function translateError(code: string, message: string) {
     return 'No encontramos esa opción en el catálogo. Actualiza la página e inténtalo de nuevo.'
   }
   if (code === 'INVALID_PARAMS') {
+    if (/outside the provider's available precipitation dates/i.test(message)) {
+      return 'Ese periodo incluye meses de lluvia que la fuente todavía no ha publicado. Elige un mes anterior al último disponible.'
+    }
     return 'Revisa el periodo elegido. Las fechas deben ser válidas y cubrir meses completos.'
   }
   return 'No pudimos completar la consulta. Inténtalo de nuevo.'
+}
+
+export async function getVariableAvailability(variableId: string): Promise<VariableAvailability> {
+  try {
+    const { data } = await http.get<{ data: VariableAvailability }>(`/availability`, {
+      params: { variableId },
+    })
+    return data.data
+  } catch (e) {
+    throw asApiError(e)
+  }
 }
 
 export async function getVariables(): Promise<Variable[]> {

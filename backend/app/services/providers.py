@@ -1,6 +1,6 @@
 """Data provider clients and series fetching."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import asyncio
 import csv
 import io
@@ -26,11 +26,21 @@ class MonthlyPoint:
 class ProviderError(Exception):
     """Provider failure that can be translated to the public API error contract."""
 
-    def __init__(self, provider: str, code: str, status_code: int, message: str):
+    def __init__(
+        self,
+        provider: str,
+        code: str,
+        status_code: int,
+        message: str,
+        upstream_status: int | None = None,
+        upstream_message: str | None = None,
+    ):
         super().__init__(message)
         self.provider = provider
         self.code = code
         self.status_code = status_code
+        self.upstream_status = upstream_status
+        self.upstream_message = upstream_message
 
 
 class DataProvider(Protocol):
@@ -62,6 +72,7 @@ class MeteomaticsClient:
         self.base_url = base_url.rstrip("/")
         self.source_overrides = source_overrides or {}
         self._session: httpx.AsyncClient | None = None
+        self._availability_cache: dict[str, tuple[float, date, date]] = {}
 
     async def _get_session(self):
         """Get or create HTTP session."""
@@ -77,6 +88,42 @@ class MeteomaticsClient:
         if self._session is not None:
             await self._session.aclose()
             self._session = None
+
+    async def get_available_dates(self, variable_id: str) -> tuple[date, date]:
+        """Return the first and last complete dates available for a source parameter."""
+        variable = get_variable(variable_id)
+        if variable is None or variable.source.provider != "meteomatics":
+            raise ValueError(f"Variable {variable_id} has no Meteomatics availability range")
+
+        cached = self._availability_cache.get(variable_id)
+        now = time.monotonic()
+        if cached is not None and cached[0] > now:
+            return cached[1], cached[2]
+
+        session = await self._get_session()
+        response = await session.get(
+            f"{self.base_url}/get_time_range",
+            params={
+                "source": self.source_overrides.get(variable_id, variable.source.product),
+                "parameters": variable.source.source_id,
+            },
+        )
+        response.raise_for_status()
+        reader = csv.DictReader(io.StringIO(response.text), delimiter=";")
+        if reader.fieldnames:
+            reader.fieldnames = [name.lstrip("\ufeff") for name in reader.fieldnames]
+        row = next((row for row in reader if row.get("parameter", "").strip() == variable.source.source_id), None)
+        if row is None:
+            raise ValueError(f"Meteomatics returned no availability range for {variable.source.source_id}")
+
+        first_timestamp = datetime.fromisoformat(row["min_date"].replace("Z", "+00:00")).date()
+        last_timestamp = datetime.fromisoformat(row["max_date"].replace("Z", "+00:00")).date()
+        # Daily accumulations are right-bounded: a value timestamped on D
+        # represents precipitation from D-1, so expose the represented dates.
+        first_complete_date = first_timestamp - timedelta(days=1)
+        last_complete_date = last_timestamp - timedelta(days=1)
+        self._availability_cache[variable_id] = (now + 6 * 60 * 60, first_complete_date, last_complete_date)
+        return first_complete_date, last_complete_date
 
     @staticmethod
     def _polygon_for_bbox(region_bbox: tuple[float, float, float, float]) -> str:
@@ -174,7 +221,10 @@ class MeteomaticsClient:
             url,
             params={
                 "source": self.source_overrides.get(variable_id, variable.source.product),
-                "polygon_sampling": "model_grid",
+                # CHIRPS is a satellite/gauge gridded product, not a forecast
+                # model. Meteomatics recommends adaptive sampling for such
+                # polygon queries; ERA5 uses its native model grid.
+                "polygon_sampling": "adaptive_grid" if variable_id == "precipitation" else "model_grid",
                 "on_invalid": "fill_with_invalid",
             },
         )
@@ -581,6 +631,38 @@ async def fetch_monthly_series(
     )
 
 
+async def get_variable_available_dates(variable_id: str) -> tuple[date, date]:
+    """Get cached source coverage dates, translating upstream failures to provider errors."""
+    variable = get_variable(variable_id)
+    if variable is None:
+        raise ValueError(f"Variable {variable_id} not found")
+    try:
+        return await get_meteomatics_client().get_available_dates(variable_id)
+    except httpx.TimeoutException as exc:
+        raise ProviderError(
+            provider="meteomatics",
+            code="PROVIDER_TIMEOUT",
+            status_code=504,
+            message="Meteomatics availability lookup timed out",
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise ProviderError(
+            provider="meteomatics",
+            code="PROVIDER_ERROR",
+            status_code=502,
+            message=f"Meteomatics availability lookup failed with status {exc.response.status_code}",
+            upstream_status=exc.response.status_code,
+            upstream_message=exc.response.text.strip()[:500] or None,
+        ) from exc
+    except Exception as exc:
+        raise ProviderError(
+            provider="meteomatics",
+            code="PROVIDER_ERROR",
+            status_code=502,
+            message="Meteomatics availability lookup failed",
+        ) from exc
+
+
 async def _fetch_from_provider(
     client: DataProvider,
     provider: str,
@@ -606,11 +688,14 @@ async def _fetch_from_provider(
             message=f"The {provider} request timed out",
         ) from exc
     except httpx.HTTPStatusError as exc:
+        upstream_message = exc.response.text.strip()[:500] or None
         raise ProviderError(
             provider=provider,
             code="PROVIDER_ERROR",
             status_code=502,
             message=f"The {provider} request failed with status {exc.response.status_code}",
+            upstream_status=exc.response.status_code,
+            upstream_message=upstream_message,
         ) from exc
     except Exception as exc:
         raise ProviderError(
