@@ -58,10 +58,10 @@ NDVI_SOURCE = VariableSource(
 AIR_TEMP_SOURCE = VariableSource(
     provider="meteomatics",
     product="ecmwf-era5",
-    source_id="t_2m:C",
+    source_id="t_mean_2m_24h:C",
     native_unit="°C",
     aggregation="mean",
-    resolution="~30km / hourly",
+    resolution="~30km / daily mean derived from ERA5",
     access_method="Meteomatics API",
 )
 
@@ -83,7 +83,7 @@ VARIABLES: dict[str, Variable] = {
         definition="Vegetation health index from MODIS surface reflectance. Values range -1 to 1; higher = greener.",
         category="vegetation",
         canonical_unit="index",
-        min_years=5,
+        min_years=1,
         frequency="monthly",
         source=NDVI_SOURCE,
         supported_region_ids=["amazon"],
@@ -91,10 +91,10 @@ VARIABLES: dict[str, Variable] = {
     "air_temperature": Variable(
         id="air_temperature",
         name="Air Temperature (2m)",
-        definition="Near-surface air temperature from ERA5 reanalysis. Monthly mean of hourly values.",
+        definition="Near-surface air temperature from ERA5 reanalysis. Monthly mean of daily 24-hour means.",
         category="temperature",
         canonical_unit="°C",
-        min_years=5,
+        min_years=1,
         frequency="monthly",
         source=AIR_TEMP_SOURCE,
         supported_region_ids=["arctic"],
@@ -105,7 +105,7 @@ VARIABLES: dict[str, Variable] = {
         definition="Total monthly precipitation from CHIRPS satellite-gauge blend. Sum of daily 24h accumulations.",
         category="precipitation",
         canonical_unit="mm",
-        min_years=5,
+        min_years=1,
         frequency="monthly",
         source=PRECIP_SOURCE,
         supported_region_ids=["amazon"],

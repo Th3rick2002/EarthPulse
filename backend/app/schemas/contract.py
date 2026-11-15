@@ -59,6 +59,15 @@ class VariableDTO(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
 
+class VariableAvailabilityDTO(BaseModel):
+    """Date bounds exposed by a live data source."""
+    variableId: str
+    availableStartDate: date
+    availableEndDate: date
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+
 class BBoxDTO(BaseModel):
     """Bounding box as object per contract."""
     latMin: float = Field(ge=-90, le=90)
@@ -168,6 +177,41 @@ class SeriesResponse(BaseModel):
     data: SeriesResponseData
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class CompareAreaRequest(BaseModel):
+    """One user-drawn rectangular area to analyze independently."""
+    areaId: str = Field(min_length=1, max_length=80)
+    name: str = Field(min_length=1, max_length=80)
+    bbox: BBoxDTO
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    @model_validator(mode="after")
+    def validate_bbox(self):
+        if self.bbox.lonMin >= self.bbox.lonMax:
+            raise ValueError("bbox must not cross the antimeridian")
+        if self.bbox.lonMax - self.bbox.lonMin > 35 or self.bbox.latMax - self.bbox.latMin > 25:
+            raise ValueError("drawn areas must be no wider than 35 degrees longitude or 25 degrees latitude")
+        return self
+
+
+class CompareSeriesRequest(BaseModel):
+    """Batch request for independent analyses over up to four map areas."""
+    variableId: str
+    startDate: date
+    endDate: date
+    areas: list[CompareAreaRequest] = Field(min_length=1, max_length=4)
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    @model_validator(mode="after")
+    def validate_request(self):
+        if len({area.areaId for area in self.areas}) != len(self.areas):
+            raise ValueError("areaId values must be unique")
+        if self.startDate > self.endDate:
+            raise ValueError("startDate must not be after endDate")
+        return self
 
 
 class HealthResponse(BaseModel):

@@ -16,10 +16,14 @@ from app.schemas.contract import ErrorDetail, ErrorResponse
 async def lifespan(app: FastAPI):
     """Initialize application repositories."""
     from app.repositories import SQLiteCacheRepository, SQLiteRepository
+    from app.services.providers import close_provider_clients
 
     app.state.repo = SQLiteRepository()
     app.state.cache_repo = SQLiteCacheRepository()
-    yield
+    try:
+        yield
+    finally:
+        await close_provider_clients()
 
 
 app = FastAPI(
