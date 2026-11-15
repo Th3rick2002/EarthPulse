@@ -36,7 +36,11 @@ cp .env.example .env
 
 La integración consulta la temperatura ERA5 y la precipitación CHIRPS como estadísticas diarias del polígono de la región y las agrega por mes. La cuenta debe tener habilitados los productos históricos `ecmwf-era5` y `chc-chirps3`; el producto también se puede cambiar con `METEOMATICS_TEMPERATURE_SOURCE` y `METEOMATICS_PRECIPITATION_SOURCE`.
 
-NDVI consulta la colección STAC `modis-13Q1-061`, firma los COG públicos, selecciona por tile el compuesto de 16 días más próximo a mitad de cada mes, filtra píxeles con confiabilidad MODIS igual a 0 y aplica escala `0.0001`. No requiere credenciales. Como puede tomar más tiempo que una petición HTTP, se ejecuta en segundo plano; la ruta responde `202` y el cliente consulta el job hasta que termina. Los resultados completados se guardan en memoria por 24 horas. No subas `backend/.env` ni incluyas credenciales en logs.
+NDVI consulta la colección STAC `modis-13Q1-061`, selecciona por tile el compuesto de 16 días más próximo a mitad de cada mes, filtra píxeles con confiabilidad MODIS igual a 0 y aplica escala `0.0001`. No requiere credenciales. Como puede tomar más tiempo que una petición HTTP, se ejecuta en segundo plano y el cliente consulta el job hasta que termina.
+
+`POST /api/v1/series/compare` recibe de una a cuatro cajas rectangulares del mapa y devuelve una serie independiente por cada área. El periodo debe cubrir de 1 a 50 años completos; cada rectángulo admite hasta 35° de ancho y 25° de alto. Las respuestas completas se guardan 24 horas en `backend/data/trendscope.db` (SQLite), por variable, producto, área y periodo; al repetir una consulta exacta no se vuelve a llamar al proveedor. En Docker, monta `backend/data` como volumen si necesitas conservar la caché al recrear el contenedor.
+
+No subas `backend/.env` ni incluyas credenciales en logs.
 
 ```bash
 uvicorn app.main:app --reload --env-file .env

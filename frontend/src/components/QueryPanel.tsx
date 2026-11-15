@@ -1,26 +1,37 @@
-import { useState } from 'react'
-import type { Region, SeriesQuery, Variable } from '../types/api'
+import { lazy, Suspense, useState } from 'react'
+import type { CompareSeriesQuery, SelectedArea, Variable } from '../types/api'
 
-// The v1 catalog does not expose supported variable/region pairs yet.
-// Keep the MVP allowlist aligned with backend/app/data/catalog.py.
-const MVP_REGION_IDS_BY_VARIABLE: Record<string, string[]> = {
-  ndvi: ['amazon'],
-  air_temperature: ['arctic'],
-  precipitation: ['amazon'],
+const RegionMap = lazy(() => import('./RegionMap'))
+
+const VARIABLE_COPY: Record<string, { title: string; help: string }> = {
+  ndvi: {
+    title: 'Vegetación vista desde satélite',
+    help: 'El satélite observa qué tan verde está la vegetación. Se mide con un índice.',
+  },
+  air_temperature: {
+    title: 'Temperatura del aire',
+    help: 'Revisamos cómo cambia la temperatura del aire cerca de la superficie.',
+  },
+  precipitation: {
+    title: 'Lluvia acumulada',
+    help: 'Sumamos la lluvia de cada mes para ver cómo cambia con los años.',
+  },
 }
+
+const UNIT_NAMES: Record<string, string> = { index: 'índice' }
 
 interface Props {
   variables: Variable[]
-  regions: Region[]
+  areas: SelectedArea[]
   loading: boolean
-  onAnalyze: (query: SeriesQuery) => void
-  onRegionChange: (regionId: string) => void
+  onAnalyze: (query: CompareSeriesQuery) => void
+  onAreasChange: (areas: SelectedArea[]) => void
 }
 
 function lastFullMonth(): string {
   const d = new Date()
   let y = d.getFullYear()
-  let m = d.getMonth() // 0-based = mes anterior en 1-based
+  let m = d.getMonth()
   if (m === 0) {
     y -= 1
     m = 12
@@ -28,12 +39,18 @@ function lastFullMonth(): string {
   return `${y}-${String(m).padStart(2, '0')}`
 }
 
-function defaultRange(minYears: number) {
-  const endYear = new Date().getFullYear() - 1
-  return { start: `${endYear - minYears + 1}-01`, end: `${endYear}-12` }
+function defaultRange() {
+  const end = lastFullMonth()
+  const [year, month] = end.split('-').map(Number)
+  const start = new Date(Date.UTC(year, month - 1 - 11, 1))
+  return {
+    start: `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, '0')}`,
+    end,
+  }
 }
 
 function monthsBetween(start: string, end: string): number {
+  if (!start || !end) return 0
   const [sy, sm] = start.split('-').map(Number)
   const [ey, em] = end.split('-').map(Number)
   return (ey - sy) * 12 + (em - sm) + 1
@@ -47,151 +64,114 @@ function toEndDate(month: string): string {
   return `${month}-${String(last).padStart(2, '0')}`
 }
 
-export default function QueryPanel({
-  variables,
-  regions,
-  loading,
-  onAnalyze,
-  onRegionChange,
-}: Props) {
+export default function QueryPanel({ variables, areas, loading, onAnalyze, onAreasChange }: Props) {
   const [variableId, setVariableId] = useState(variables[0]?.variableId ?? '')
-  const [regionId, setRegionId] = useState(() => {
-    const allowedIds = MVP_REGION_IDS_BY_VARIABLE[variables[0]?.variableId ?? ''] ?? []
-    return regions.find((region) => allowedIds.includes(region.regionId))?.regionId ?? ''
-  })
-  const [range, setRange] = useState(() =>
-    defaultRange(variables[0]?.minYears ?? 5),
-  )
-
-  const variable = variables.find((v) => v.variableId === variableId)
-  const supportedRegionIds = MVP_REGION_IDS_BY_VARIABLE[variableId] ?? []
-  const availableRegions = regions.filter((region) =>
-    supportedRegionIds.includes(region.regionId),
-  )
-  const minYears = variable?.minYears ?? 5
-
+  const [range, setRange] = useState(defaultRange)
+  const variable = variables.find((item) => item.variableId === variableId)
+  const monthCount = monthsBetween(range.start, range.end)
   let error: string | null = null
   if (!range.start || !range.end) {
-    error = 'Selecciona el mes de inicio y de fin.'
-  } else if (monthsBetween(range.start, range.end) <= 0) {
-    error = 'El mes de inicio debe ser anterior al mes de fin.'
-  } else if (monthsBetween(range.start, range.end) < minYears * 12) {
-    error = `Esta variable requiere al menos ${minYears} años de datos.`
+    error = 'Elige el primer y el último mes del periodo.'
+  } else if (monthCount < 12) {
+    error = 'El periodo debe tener al menos 1 año para comparar los cambios.'
+  } else if (monthCount > 600) {
+    error = 'El periodo no puede superar los 50 años.'
+  } else if (range.end > lastFullMonth()) {
+    error = 'Elige un periodo que termine en un mes completo.'
+  } else if (areas.length === 0) {
+    error = 'Dibuja al menos una zona en el mapa.'
   }
 
-  const canSubmit = !loading && !error && variableId !== '' && regionId !== ''
+  const canSubmit = !loading && !error && variableId !== ''
 
-  function handleVariableChange(id: string) {
-    setVariableId(id)
-    const nextRegionIds = MVP_REGION_IDS_BY_VARIABLE[id] ?? []
-    const nextRegions = regions.filter((region) =>
-      nextRegionIds.includes(region.regionId),
-    )
-    const nextRegionId = nextRegions.some((region) => region.regionId === regionId)
-      ? regionId
-      : (nextRegions[0]?.regionId ?? '')
-    setRegionId(nextRegionId)
-    onRegionChange(nextRegionId)
-    const next = variables.find((v) => v.variableId === id)
-    const nextMin = next?.minYears ?? 5
-    if (
-      range.start &&
-      range.end &&
-      monthsBetween(range.start, range.end) < nextMin * 12
-    ) {
-      setRange(defaultRange(nextMin))
-    }
-  }
-
-  function handleRegionChange(id: string) {
-    setRegionId(id)
-    onRegionChange(id)
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
     if (!canSubmit) return
     onAnalyze({
       variableId,
-      regionId,
+      areas,
       startDate: toStartDate(range.start),
       endDate: toEndDate(range.end),
     })
   }
 
+  function addArea(bbox: SelectedArea['bbox']) {
+    const nextNumber = areas.length + 1
+    onAreasChange([
+      ...areas,
+      { areaId: `zona-${crypto.randomUUID()}`, name: `Zona ${nextNumber}`, bbox },
+    ])
+  }
+
+  function renameArea(areaId: string, name: string) {
+    onAreasChange(areas.map((area) => area.areaId === areaId ? { ...area, name } : area))
+  }
+
   return (
-    <section className="card" aria-labelledby="query-title">
-      <h2 id="query-title">Consulta</h2>
+    <section className="card query-card" aria-labelledby="query-title">
+      <div className="query-intro">
+        <span className="eyebrow">EXPLORADOR DE LA TIERRA</span>
+        <h1 id="query-title">Descubre cómo cambian distintos lugares</h1>
+        <p>Elige qué observar, dibuja una o varias zonas y compara lo que cuentan las mediciones.</p>
+      </div>
       <form className="query-form" onSubmit={handleSubmit}>
-        <div className="field">
-          <label htmlFor="variable">Variable</label>
-          <select
-            id="variable"
-            value={variableId}
-            onChange={(e) => handleVariableChange(e.target.value)}
-          >
-            {variables.map((v) => (
-              <option key={v.variableId} value={v.variableId}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-          {variable && (
-            <span className="field-help">
-              {variable.description} ({variable.unit})
-            </span>
-          )}
-        </div>
+        <fieldset className="query-step">
+          <legend><span className="step-number">1</span> ¿Qué quieres explorar?</legend>
+          <div className="field">
+            <label htmlFor="variable">Elige un tema de la Tierra</label>
+            <select id="variable" value={variableId} disabled={loading} onChange={(event) => setVariableId(event.target.value)}>
+              {variables.map((item) => (
+                <option key={item.variableId} value={item.variableId}>
+                  {VARIABLE_COPY[item.variableId]?.title ?? item.name}
+                </option>
+              ))}
+            </select>
+            {variable && (
+              <span className="field-help">
+                {VARIABLE_COPY[variable.variableId]?.help ?? variable.description} Se mide en {UNIT_NAMES[variable.unit] ?? variable.unit}.
+              </span>
+            )}
+          </div>
+        </fieldset>
 
-        <div className="field">
-          <label htmlFor="region">Región</label>
-          <select
-            id="region"
-            value={regionId}
-            onChange={(e) => handleRegionChange(e.target.value)}
-          >
-            {availableRegions.map((r) => (
-              <option key={r.regionId} value={r.regionId}>
-                {r.name}
-                {r.type === 'custom' ? ' (personalizada)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="field">
-          <label htmlFor="start">Desde (mes)</label>
-          <input
-            id="start"
-            type="month"
-            value={range.start}
-            max={lastFullMonth()}
-            onChange={(e) =>
-              setRange((r) => ({ ...r, start: e.target.value }))
-            }
-          />
-        </div>
-
-        <div className="field">
-          <label htmlFor="end">Hasta (mes)</label>
-          <input
-            id="end"
-            type="month"
-            value={range.end}
-            max={lastFullMonth()}
-            onChange={(e) => setRange((r) => ({ ...r, end: e.target.value }))}
-          />
-        </div>
-
-        <button className="btn" type="submit" disabled={!canSubmit}>
-          {loading ? 'Analizando…' : 'Analizar'}
-        </button>
-
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
+        <fieldset className="query-step query-step-period">
+          <legend><span className="step-number">2</span> ¿Qué periodo quieres comparar?</legend>
+          <p className="step-help">Elige entre 1 y 50 años. Comparamos meses completos y usamos el mismo periodo para todas las zonas.</p>
+          <div className="period-fields">
+            <div className="field">
+              <label htmlFor="start">Desde (mes y año)</label>
+              <input id="start" type="month" value={range.start} max={range.end || lastFullMonth()} disabled={loading} onChange={(event) => setRange((current) => ({ ...current, start: event.target.value }))} />
+            </div>
+            <div className="field">
+              <label htmlFor="end">Hasta (mes y año)</label>
+              <input id="end" type="month" value={range.end} min={range.start} max={lastFullMonth()} disabled={loading} onChange={(event) => setRange((current) => ({ ...current, end: event.target.value }))} />
+            </div>
+          </div>
+          <p className="period-count" aria-live="polite">
+            {monthCount > 0 ? `${(monthCount / 12).toLocaleString('es-SV', { maximumFractionDigits: 1 })} años seleccionados` : 'Selecciona ambos meses'}
           </p>
-        )}
+        </fieldset>
+
+        <fieldset className="query-step map-step">
+          <legend><span className="step-number">3</span> ¿Qué lugares quieres comparar?</legend>
+          <Suspense fallback={<div className="leaflet-map-shell map-loading" role="status">Cargando el mapa…</div>}>
+            <RegionMap
+              areas={areas}
+              onAddArea={addArea}
+              onRemoveArea={(areaId) => onAreasChange(areas.filter((area) => area.areaId !== areaId))}
+              onRenameArea={renameArea}
+              disabled={loading}
+            />
+          </Suspense>
+        </fieldset>
+
+        <div className="query-action">
+          <button className="btn" type="submit" disabled={!canSubmit}>
+            {loading ? 'Buscando datos…' : areas.length > 1 ? 'Comparar zonas' : 'Ver qué ha cambiado'}
+          </button>
+          <span>Analizamos cada zona por separado, sin mezclar sus mediciones.</span>
+        </div>
+        {error && <p className="form-error" role="alert">{error}</p>}
       </form>
     </section>
   )

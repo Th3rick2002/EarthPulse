@@ -13,16 +13,22 @@
 - Cobertura de tendencia: mínimo `minYears`, tres observaciones y 50% de meses con calidad `ok`.
 - Meteomatics implementado para temperatura ERA5 y precipitación CHIRPS: consulta agregados diarios del área y forma puntos mensuales; maneja faltantes, timeouts y cierre de sesión HTTP.
 - Planetary Computer para NDVI MODIS: STAC selecciona el compuesto más cercano a mitad de mes por tile; el Data API devuelve NDVI+QA recortados en GeoTIFF para filtrar y agregar. Aplica calidad MODIS, escala `0.0001` y ponderación geográfica aproximada.
-- Las consultas NDVI responden `202` y el frontend sondea el job sin mantener una petición HTTP abierta. Resultados completados se reutilizan 24 horas en memoria del proceso.
+- Las consultas NDVI responden `202` y el frontend sondea el job sin mantener una petición HTTP abierta. La respuesta completa también se guarda 24 horas en caché SQLite.
 - La consulta Meteomatics depende de que la cuenta tenga habilitados los productos históricos usados; Planetary Computer no requiere credenciales para este dataset público.
 - FastAPI publica Swagger en `/docs` y OpenAPI en `/openapi.json`.
 - Consulta real `ndvi/amazon`, 2021–2025, completada con el código final en 116.1 s: devolvió 60 meses, 56 observaciones `ok` y análisis de tendencia. Consulta real de un mes: 11.9 s; su repetición aprovechó la caché del proceso. El flujo completo respondió `202` mientras trabajaba y `200` al completar.
 
 ## Frontend
 
-- Pantalla Explorador con consulta, globo 3D, gráfica, veredicto y estados de carga/error/sin datos.
+- Pantalla Explorador con consulta guiada, mapa Leaflet, gráficas, veredictos y estados de carga/error/sin datos.
 - Cliente HTTP único (`src/services/api.ts`) y modelos TypeScript provisionales (`src/types/api.ts`).
-- Compatibilidad de MVP limitada a NDVI/Amazonía, temperatura/Ártico y precipitación/Amazonía.
+- Catálogo inicial: NDVI, temperatura y precipitación; el mapa permite dibujar áreas adicionales con bbox y comparar hasta cuatro a la vez.
+- Explorador rediseñado en español claro con consulta guiada, mapa Leaflet, mensajes de espera con tiempo transcurrido y explicación principal antes de los datos técnicos.
+- Resumen de tendencias y errores localizados al español; estadísticas avanzadas quedan en un panel ampliable. Se añadieron controles accesibles, diseño adaptable y respeto a movimiento reducido.
+- `docs/specs/ui-ux.md` actualizado para reflejar la experiencia implementada y aclarar que el mapa muestra el área agregada, no datos por píxel.
+- Selector de zonas migrado a Leaflet con hasta cuatro rectángulos independientes; comparación de series por área mediante `POST /api/v1/series/compare`.
+- Intervalos configurables entre 1 y 50 años; caché persistente SQLite de series completas con TTL de 24 horas, clave por variable/producto/bbox/periodo.
+- Retiradas las dependencias Three.js sin uso; Leaflet y la gráfica se cargan de forma diferida.
 
 ## Pendiente de verificación
 
@@ -30,10 +36,10 @@
 
 ## Verificación del frontend contra backend integrado
 
-- Selector limita pares al catálogo MVP aceptado por backend.
+- Comparación acepta hasta cuatro áreas dibujadas y muestra una serie independiente por área.
 - Mensaje de `trendAnalysis: null` contempla tanto años completos como cobertura observada mínima.
 - README de frontend y backend actualizado para reflejar el estado real y comandos de arranque.
-- `pnpm lint` y `pnpm build` pasan; build muestra advertencia de chunk JS mayor a 500 kB.
+- `pnpm lint`, `pnpm build`, `compileall` de Python y `git diff --check` pasan. Vite aún avisa que un chunk supera 500 kB; el mapa y la gráfica se cargan en chunks diferidos.
 
 ## Scripts de desarrollo
 

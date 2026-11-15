@@ -3,73 +3,76 @@ import type { TrendAnalysis, Variable } from '../types/api'
 interface Props {
   trend: TrendAnalysis | null
   variable: Variable
+  observed: number
+  interpolated: number
+  total: number
 }
 
 const fmt = (n: number, digits = 3) =>
-  n.toLocaleString('es', { maximumSignificantDigits: digits })
+  n.toLocaleString('es-SV', { maximumSignificantDigits: digits })
 
-export default function VerdictCard({ trend, variable }: Props) {
-  if (!trend) {
-    return (
-      <section className="card verdict neutral" aria-labelledby="verdict-title">
-        <h2 id="verdict-title">Veredicto</h2>
-        <span className="badge">● Cobertura insuficiente</span>
-        <p>
-          No se alcanzan los mínimos para calcular una tendencia: al menos{' '}
-          {variable.minYears} años completos y observaciones válidas en el 50% de
-          los meses solicitados. Puedes ampliar el intervalo o probar otro
-          periodo.
-        </p>
-      </section>
-    )
-  }
-
-  const direction =
-    trend.slope > 0 ? 'creciente' : trend.slope < 0 ? 'decreciente' : 'sin cambio'
-  const arrow = trend.slope > 0 ? '▲' : trend.slope < 0 ? '▼' : '■'
-  const variant = trend.significant ? 'ok' : 'warn'
-  const sign = trend.slope > 0 ? '+' : ''
-  const pText = trend.pValue < 0.001 ? '< 0,001' : fmt(trend.pValue)
+export default function VerdictCard({ trend, variable, observed, interpolated, total }: Props) {
+  const coverage = total === 0 ? 0 : Math.round((observed / total) * 100)
+  const direction = !trend || trend.slope === 0 ? 'sin un cambio claro' : trend.slope > 0 ? 'ha aumentado' : 'ha disminuido'
+  const subject = variable.variableId === 'ndvi'
+    ? 'La vegetación'
+    : variable.variableId === 'air_temperature'
+      ? 'La temperatura del aire'
+      : variable.variableId === 'precipitation'
+        ? 'La lluvia'
+        : variable.name
+  const unit = variable.unit === 'index' ? 'índice' : variable.unit
 
   return (
-    <section className={`card verdict ${variant}`} aria-labelledby="verdict-title">
-      <h2 id="verdict-title">Veredicto</h2>
-      <span className="badge">
-        {arrow}{' '}
-        {trend.significant
-          ? `Tendencia ${direction} significativa`
-          : `Tendencia ${direction} no significativa`}
-      </span>
-      <p>{trend.interpretation}</p>
-
-      <dl className="verdict-stats">
-        <div>
-          <dt>Pendiente</dt>
-          <dd>
-            {sign}
-            {fmt(trend.slope)} {variable.unit} por año
-          </dd>
-        </div>
-        <div>
-          <dt>p-value (Mann-Kendall)</dt>
-          <dd>{pText}</dd>
-        </div>
-        <div>
-          <dt>Periodo</dt>
-          <dd>
-            {trend.startDate} a {trend.endDate}
-          </dd>
-        </div>
-        <div>
-          <dt>Umbral</dt>
-          <dd>p &lt; 0,05</dd>
-        </div>
-      </dl>
-
-      <p className="disclaimer">
-        Significancia estadística indica evidencia de una tendencia lineal en
-        estos datos; no implica causalidad.
-      </p>
+    <section className={`card verdict ${trend?.significant ? 'ok' : trend ? 'warn' : 'neutral'}`} aria-labelledby="verdict-title">
+      <span className="eyebrow">LO QUE NOS CUENTAN LOS DATOS</span>
+      <h2 id="verdict-title">
+        {trend
+          ? `${subject} ${direction}`
+          : 'Aún no hay suficientes datos para descubrir una tendencia'}
+      </h2>
+      {trend ? (
+        <>
+          <p className="verdict-summary">
+            {trend.significant
+              ? 'El patrón es suficientemente claro en este periodo según la prueba estadística.'
+              : 'Los datos no muestran una señal suficientemente clara para confirmar una tendencia. Eso no demuestra que nada haya cambiado.'}
+          </p>
+          <p className="verdict-slope">
+            {trend.slope > 0 ? '+' : ''}{fmt(trend.slope)} {unit} por año
+            <span> es el cambio promedio estimado.</span>
+          </p>
+          <details className="technical-details">
+            <summary>¿Cómo sabemos si la tendencia es clara?</summary>
+            <p>
+              Comparamos el orden de las mediciones con la prueba Mann-Kendall.
+              El valor p es {trend.pValue < 0.001 ? 'menor que 0,001' : fmt(trend.pValue)};
+              consideramos que hay evidencia estadística cuando es menor que 0,05.
+              Esto ayuda a detectar patrones, pero no explica por qué ocurren.
+            </p>
+            <dl className="verdict-stats">
+              <div><dt>Periodo</dt><dd>{formatDate(trend.startDate)} a {formatDate(trend.endDate)}</dd></div>
+              <div><dt>Meses con datos</dt><dd>{observed} de {total} ({coverage}%)</dd></div>
+              {interpolated > 0 && <div><dt>Meses estimados</dt><dd>{interpolated}</dd></div>}
+              <div><dt>Prueba</dt><dd>Mann-Kendall</dd></div>
+            </dl>
+            <p className="disclaimer">Una tendencia muestra un patrón en los datos; por sí sola no demuestra qué lo causó.</p>
+          </details>
+        </>
+      ) : (
+        <>
+          <p className="verdict-summary">
+            Encontramos mediciones para {observed} de {total} meses ({coverage}%).
+            Para analizar una tendencia necesitamos al menos {variable.minYears} años y datos suficientes a lo largo del periodo.
+          </p>
+          <p className="field-help">Prueba a ampliar las fechas o elegir otra región.</p>
+        </>
+      )}
     </section>
   )
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('es-SV', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+    .format(new Date(`${value.slice(0, 7)}-01T00:00:00Z`))
 }

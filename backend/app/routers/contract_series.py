@@ -2,9 +2,13 @@
 
 from calendar import monthrange
 from datetime import date, datetime, timezone
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from typing import Annotated
+from hashlib import sha256
+import asyncio
+from copy import deepcopy
+import json
 import random
 
 from app.data.catalog import (
@@ -22,6 +26,7 @@ from app.schemas.contract import (
     TrendAnalysisDTO,
     QualityValue,
     ErrorResponse,
+    CompareSeriesRequest,
     generate_series_id,
     generate_analysis_id,
 )
@@ -55,6 +60,35 @@ def _region_to_dto(region) -> RegionDTO:
         description=region.description,
         type=region.type,
     )
+
+
+def _series_cache_key(variable_id: str, bbox: tuple[float, float, float, float], start_date: date, end_date: date) -> str:
+    variable = get_variable(variable_id)
+    identity = {
+        "variableId": variable_id,
+        "provider": variable.source.provider,
+        "product": variable.source.product,
+        "sourceId": variable.source.source_id,
+        "bbox": [round(value, 5) for value in bbox],
+        "startDate": start_date.isoformat(),
+        "endDate": end_date.isoformat(),
+    }
+    digest = sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+    return f"series:{digest}"
+
+
+def _validate_period(start_date: date, end_date: date) -> None:
+    if start_date > end_date or start_date.day != 1 or end_date.day != monthrange(end_date.year, end_date.month)[1]:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_PARAMS", "message": "Dates must cover inclusive full months", "details": {}},
+        )
+    month_count = (end_date.year - start_date.year) * 12 + end_date.month - start_date.month + 1
+    if not 12 <= month_count <= 600:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_PARAMS", "message": "The selected period must be between 1 and 50 years", "details": {"months": month_count}},
+        )
 
 
 def _generate_mock_time_series(
@@ -134,6 +168,8 @@ async def get_series(
     region_id: Annotated[str, Query(alias="regionId")],
     start_date: Annotated[date, Query(alias="startDate")],
     end_date: Annotated[date, Query(alias="endDate")],
+    request: Request,
+    response: Response,
 ):
     """
     Get monthly time series with trend analysis per contract.
@@ -164,20 +200,14 @@ async def get_series(
             detail={"code": "INVALID_PARAMS", "message": reason, "details": {}}
         )
 
-    # API date bounds are inclusive full months.
-    if (
-        start_date > end_date
-        or start_date.day != 1
-        or end_date.day != monthrange(end_date.year, end_date.month)[1]
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "INVALID_PARAMS",
-                "message": "startDate and endDate must cover inclusive full months",
-                "details": {"startDate": start_date.isoformat(), "endDate": end_date.isoformat()},
-            },
-        )
+    _validate_period(start_date, end_date)
+    cache_repo = request.app.state.cache_repo
+    cache_key = _series_cache_key(variable_id, region.bbox, start_date, end_date)
+    cached_response = await cache_repo.get_response(cache_key)
+    if cached_response is not None:
+        response.headers["X-Cache"] = "HIT"
+        return cached_response
+    response.headers["X-Cache"] = "MISS"
 
     if variable.source.provider == "planetary-computer":
         query_key = f"{variable_id}:{region_id}:{start_date.isoformat()}:{end_date.isoformat()}"
@@ -194,9 +224,11 @@ async def get_series(
             )
         if job.status == "failed":
             _raise_job_error(job.error)
-        return _build_series_response(
+        result = _build_series_response(
             variable_id, region_id, start_date, end_date, job.points or []
         )
+        await cache_repo.set_response(cache_key, result.model_dump(mode="json", by_alias=True))
+        return result
 
     try:
         time_series = await fetch_monthly_series(
@@ -211,13 +243,116 @@ async def get_series(
             detail={"code": exc.code, "message": str(exc), "details": {"provider": exc.provider}},
         ) from exc
 
-    return _build_series_response(
+    result = _build_series_response(
         variable_id, region_id, start_date, end_date, time_series
     )
+    await cache_repo.set_response(cache_key, result.model_dump(mode="json", by_alias=True))
+    return result
+
+
+@router.post("/series/compare", responses=ERROR_RESPONSES)
+async def compare_areas(body: CompareSeriesRequest, request: Request, response: Response):
+    """Fetch and analyze up to four independently drawn map rectangles."""
+    variable = get_variable(body.variableId)
+    if variable is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": f"Variable '{body.variableId}' not found", "details": {}},
+        )
+    _validate_period(body.startDate, body.endDate)
+
+    cache_repo = request.app.state.cache_repo
+    areas = []
+    cached_by_id: dict[str, dict | None] = {}
+    for area in body.areas:
+        bbox = (area.bbox.latMin, area.bbox.latMax, area.bbox.lonMin, area.bbox.lonMax)
+        cache_key = _series_cache_key(body.variableId, bbox, body.startDate, body.endDate)
+        areas.append((area, bbox, cache_key))
+        cached_by_id[area.areaId] = await cache_repo.get_response(cache_key)
+
+    def result_for(area, cached_response):
+        payload = deepcopy(cached_response["data"])
+        payload["region"]["regionId"] = area.areaId
+        payload["region"]["name"] = area.name
+        for point in payload["timeSeries"]:
+            point["regionId"] = area.areaId
+            point["seriesId"] = generate_series_id(body.variableId, area.areaId, date.fromisoformat(point["date"]))
+        trend = payload.get("trendAnalysis")
+        if trend:
+            trend["regionId"] = area.areaId
+            trend["analysisId"] = generate_analysis_id(body.variableId, area.areaId, body.startDate, body.endDate)
+        return {"areaId": area.areaId, "name": area.name, "series": payload}
+
+    if all(cached_by_id[area.areaId] is not None for area, _, _ in areas):
+        response.headers["X-Cache"] = "HIT"
+        return {"data": {"results": [result_for(area, cached_by_id[area.areaId]) for area, _, _ in areas]}}
+
+    response.headers["X-Cache"] = "PARTIAL" if any(cached_by_id.values()) else "MISS"
+    job_query_key = json.dumps({
+        "variableId": body.variableId,
+        "startDate": body.startDate.isoformat(),
+        "endDate": body.endDate.isoformat(),
+        "areas": [
+            {"areaId": area.areaId, "bbox": [round(value, 5) for value in bbox]}
+            for area, bbox, _ in areas
+        ],
+    }, sort_keys=True)
+
+    async def fetch_batch():
+        semaphore = asyncio.Semaphore(2)
+
+        async def fetch_one(area, bbox, cache_key):
+            cached = cached_by_id[area.areaId]
+            if cached is not None:
+                return result_for(area, cached)
+            async with semaphore:
+                points = await fetch_monthly_series(
+                    body.variableId,
+                    area.areaId,
+                    body.startDate,
+                    body.endDate,
+                    region_bbox=bbox,
+                )
+            region_dto = RegionDTO(
+                regionId=area.areaId,
+                name=area.name,
+                bbox=area.bbox,
+                description="Zona rectangular seleccionada en el mapa.",
+                type="custom",
+            )
+            series = _build_series_response(
+                body.variableId,
+                area.areaId,
+                body.startDate,
+                body.endDate,
+                points,
+                region_override=region_dto,
+            )
+            serialized = series.model_dump(mode="json", by_alias=True)
+            await cache_repo.set_response(cache_key, serialized)
+            return {"areaId": area.areaId, "name": area.name, "series": serialized["data"]}
+
+        results = await asyncio.gather(*(fetch_one(area, bbox, key) for area, bbox, key in areas))
+        return {"data": {"results": results}}
+
+    job = get_or_start_series_job(
+        job_query_key,
+        ("batch", job_query_key),
+        fetch_batch,
+    )
+    if job.status == "processing":
+        return JSONResponse(
+            status_code=202,
+            headers={"Retry-After": "2"},
+            content={"data": {"jobId": job.job_id, "status": job.status}},
+        )
+    if job.status == "failed":
+        _raise_job_error(job.error)
+    return JSONResponse(content=job.points)
 
 
 @router.get("/series/jobs/{job_id}", responses=ERROR_RESPONSES)
-async def get_series_job_status(job_id: str):
+async def get_series_job_status(job_id: str, request: Request, response: Response):
     """Poll a long-running series query and return the normal series DTO when ready."""
     job = get_series_job(job_id)
     if job is None:
@@ -234,12 +369,25 @@ async def get_series_job_status(job_id: str):
     if job.status == "failed":
         _raise_job_error(job.error)
 
+    if isinstance(job.query, tuple) and job.query and job.query[0] == "batch":
+        return JSONResponse(content=job.points)
+
     # The query key is stored on the job so its completed data can be formatted
     # as the exact same DTO returned by the synchronous providers.
     variable_id, region_id, start_date, end_date = job.query
-    return _build_series_response(
+    region = get_region(region_id)
+    cache_key = _series_cache_key(variable_id, region.bbox, start_date, end_date)
+    cache_repo = request.app.state.cache_repo
+    cached_response = await cache_repo.get_response(cache_key)
+    if cached_response is not None:
+        response.headers["X-Cache"] = "HIT"
+        return cached_response
+    response.headers["X-Cache"] = "MISS"
+    result = _build_series_response(
         variable_id, region_id, start_date, end_date, job.points or []
     )
+    await cache_repo.set_response(cache_key, result.model_dump(mode="json", by_alias=True))
+    return result
 
 
 def _raise_job_error(error: Exception | None) -> None:
@@ -254,9 +402,9 @@ def _raise_job_error(error: Exception | None) -> None:
     )
 
 
-def _build_series_response(variable_id, region_id, start_date, end_date, time_series):
+def _build_series_response(variable_id, region_id, start_date, end_date, time_series, region_override: RegionDTO | None = None):
     variable = get_variable(variable_id)
-    region = get_region(region_id)
+    region = get_region(region_id) if region_override is None else None
     expected_months = (end_date.year - start_date.year) * 12 + end_date.month - start_date.month + 1
     min_years = variable.min_years
 
@@ -327,7 +475,7 @@ def _build_series_response(variable_id, region_id, start_date, end_date, time_se
     # Build response per contract
     response_data = SeriesResponseData(
         variable=_variable_to_dto(variable),
-        region=_region_to_dto(region),
+        region=region_override or _region_to_dto(region),
         timeSeries=contract_time_series,
         trendAnalysis=trend_analysis,
     )

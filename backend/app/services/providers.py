@@ -537,6 +537,7 @@ async def fetch_monthly_series(
     region_id: str,
     start_date: date,
     end_date: date,
+    region_bbox: tuple[float, float, float, float] | None = None,
 ) -> list[MonthlyPoint]:
     """
     Fetch monthly aggregated series for a variable/region.
@@ -549,11 +550,13 @@ async def fetch_monthly_series(
         raise ValueError(f"Variable {variable_id} not found")
 
     provider = variable.source.provider
-    region = get_region(region_id)
-    if not region:
-        raise ValueError(f"Region {region_id} not found")
-
-    bbox = region.bbox
+    if region_bbox is None:
+        region = get_region(region_id)
+        if not region:
+            raise ValueError(f"Region {region_id} not found")
+        bbox = region.bbox
+    else:
+        bbox = region_bbox
 
     if provider == "meteomatics":
         client = get_meteomatics_client()

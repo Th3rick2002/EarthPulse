@@ -1,20 +1,17 @@
 """In-process jobs for provider queries that exceed a normal HTTP request."""
 
 from dataclasses import dataclass
-from datetime import date
 import asyncio
 import time
+from typing import Any
 from uuid import uuid4
-
-from app.services.providers import MonthlyPoint, ProviderError
-
 
 @dataclass
 class SeriesJob:
     job_id: str
-    query: tuple[str, str, date, date]
+    query: Any
     status: str = "processing"
-    points: list[MonthlyPoint] | None = None
+    points: Any = None
     error: Exception | None = None
     expires_at: float = 0
 
@@ -26,7 +23,7 @@ _retention_seconds = 24 * 60 * 60
 
 def get_or_start_series_job(
     query_key: str,
-    query: tuple[str, str, date, date],
+    query: Any,
     factory,
 ) -> SeriesJob:
     """Reuse a completed/running query or start one background task."""

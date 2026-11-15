@@ -35,4 +35,6 @@ pnpm preview
 
 ## Funcionalidad
 
-La pantalla Explorador consulta variables, regiones y series; presenta un globo 3D, gráfica mensual, veredicto estadístico y estados de carga/error/sin datos. Actualmente los tipos son manuales y la selección de región sigue los pares disponibles del catálogo MVP. Consulta el contrato en [`../docs/specs/data-and-api.md`](../docs/specs/data-and-api.md) y UI/UX en [`../docs/specs/ui-ux.md`](../docs/specs/ui-ux.md).
+La pantalla Explorador permite elegir una variable, un periodo de 1 a 50 años y dibujar hasta cuatro rectángulos independientes en el mapa Leaflet. Cada rectángulo se consulta por separado; los resultados incluyen gráfica mensual, veredicto estadístico y una ficha lateral con fuente, periodo y coordenadas. Leaflet carga teselas de OpenStreetMap, por lo que el mapa necesita conexión a internet y conserva la atribución visible a sus colaboradores.
+
+El proyecto usa Leaflet 1.9.4 y React Leaflet 5.0.0. Consulta el contrato de `POST /api/v1/series/compare` en [`../docs/specs/data-and-api.md`](../docs/specs/data-and-api.md) y las decisiones de interfaz en [`../docs/specs/ui-ux.md`](../docs/specs/ui-ux.md).

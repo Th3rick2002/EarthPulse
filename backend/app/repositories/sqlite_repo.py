@@ -2,8 +2,8 @@
 
 import sqlite3
 import json
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from datetime import date, datetime
 from typing import Optional
 from contextlib import contextmanager
 
@@ -11,13 +11,13 @@ from app.repositories.base import BaseRepository, BaseCacheRepository
 from app.schemas.series import Observation, Coverage, Analysis
 
 
-DB_PATH = Path("backend/data/trendscope.db")
+DB_PATH = Path(__file__).resolve().parents[2] / "data" / "trendscope.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def get_db_connection():
     """Get SQLite connection with row factory."""
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -57,6 +57,15 @@ def init_db():
             );
 
             CREATE INDEX IF NOT EXISTS idx_cache_expires ON cache (expires_at);
+
+            CREATE TABLE IF NOT EXISTS series_response_cache (
+                cache_key TEXT PRIMARY KEY,
+                response_json TEXT NOT NULL,
+                fetched_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_series_response_cache_expires
+                ON series_response_cache (expires_at);
         """)
         conn.commit()
 
@@ -136,6 +145,41 @@ class SQLiteCacheRepository(BaseCacheRepository):
 
     def __init__(self):
         init_db()
+
+    async def get_response(self, cache_key: str) -> dict | None:
+        """Load a cached public series response if its TTL has not expired."""
+        now = datetime.now(timezone.utc)
+        with get_db_connection() as conn:
+            row = conn.execute(
+                "SELECT response_json, expires_at FROM series_response_cache WHERE cache_key = ?",
+                (cache_key,),
+            ).fetchone()
+            if row is None:
+                return None
+            if datetime.fromisoformat(row["expires_at"]) <= now:
+                conn.execute("DELETE FROM series_response_cache WHERE cache_key = ?", (cache_key,))
+                conn.commit()
+                return None
+        return json.loads(row["response_json"])
+
+    async def set_response(self, cache_key: str, response: dict, ttl_seconds: int = 86400) -> None:
+        """Persist the public series response for the configured TTL."""
+        fetched_at = datetime.now(timezone.utc)
+        expires_at = fetched_at + timedelta(seconds=ttl_seconds)
+        with get_db_connection() as conn:
+            conn.execute(
+                "DELETE FROM series_response_cache WHERE expires_at <= ?",
+                (fetched_at.isoformat(),),
+            )
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO series_response_cache
+                    (cache_key, response_json, fetched_at, expires_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (cache_key, json.dumps(response), fetched_at.isoformat(), expires_at.isoformat()),
+            )
+            conn.commit()
 
     def _make_cache_key(
         self,

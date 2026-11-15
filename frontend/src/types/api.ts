@@ -17,6 +17,25 @@ export interface BBox {
   lonMax: number
 }
 
+export interface SelectedArea {
+  areaId: string
+  name: string
+  bbox: BBox
+}
+
+export interface CompareSeriesQuery {
+  variableId: string
+  startDate: string
+  endDate: string
+  areas: SelectedArea[]
+}
+
+export interface AreaSeriesResult {
+  areaId: string
+  name: string
+  series: SeriesData
+}
+
 export interface Region {
   regionId: string
   name: string

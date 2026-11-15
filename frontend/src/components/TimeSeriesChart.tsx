@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import {
   CartesianGrid,
   Line,
@@ -13,17 +14,21 @@ interface Props {
   points: TimeSeriesPoint[]
   unit: string
   variableName: string
+  areaName?: string
 }
 
-export default function TimeSeriesChart({ points, unit, variableName }: Props) {
+export default function TimeSeriesChart({ points, unit, variableName, areaName }: Props) {
+  const chartTitleId = useId()
   const data = points.map((p) => ({
-    date: p.date.slice(0, 7),
+    date: formatMonth(p.date),
     value: p.quality === 'missing' ? null : p.value,
   }))
 
   return (
-    <section className="card wide" aria-labelledby="chart-title">
-      <h2 id="chart-title">Serie temporal mensual: {variableName}</h2>
+    <section className="card chart-card" aria-labelledby={chartTitleId}>
+      <span className="eyebrow">MES A MES</span>
+      <h2 id={chartTitleId}>Así cambió {variableName.toLowerCase()}{areaName ? ` en ${areaName}` : ''}</h2>
+      <p className="chart-intro">Cada punto resume las mediciones de un mes en la región elegida. Toca o apunta a un punto para ver su valor.</p>
       <div
         role="img"
         aria-label={`Gráfica de ${variableName} por mes, en ${unit}`}
@@ -62,7 +67,12 @@ export default function TimeSeriesChart({ points, unit, variableName }: Props) {
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="caption">Los huecos en la línea indican meses sin dato.</p>
+      <p className="caption">Un espacio en la línea significa que no encontramos datos para ese mes. El eje vertical muestra {unit}.</p>
     </section>
   )
+}
+
+function formatMonth(value: string) {
+  return new Intl.DateTimeFormat('es-SV', { month: 'short', year: '2-digit', timeZone: 'UTC' })
+    .format(new Date(`${value.slice(0, 7)}-01T00:00:00Z`))
 }
