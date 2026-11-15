@@ -15,9 +15,10 @@ export default function VerdictCard({ trend, variable }: Props) {
         <h2 id="verdict-title">Veredicto</h2>
         <span className="badge">● Cobertura insuficiente</span>
         <p>
-          No hay suficientes observaciones válidas para calcular una tendencia.
-          Se requieren al menos {variable.minYears} años de cobertura. Puedes
-          ampliar el intervalo o probar con otra región.
+          No se alcanzan los mínimos para calcular una tendencia: al menos{' '}
+          {variable.minYears} años completos y observaciones válidas en el 50% de
+          los meses solicitados. Puedes ampliar el intervalo o probar otro
+          periodo.
         </p>
       </section>
     )

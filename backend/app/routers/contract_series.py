@@ -3,6 +3,7 @@
 from calendar import monthrange
 from datetime import date, datetime, timezone
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 from typing import Annotated
 import random
 
@@ -26,6 +27,7 @@ from app.schemas.contract import (
 )
 from app.services.analysis import compute_trend_analysis
 from app.services.providers import ProviderError, fetch_monthly_series
+from app.services.series_jobs import get_or_start_series_job, get_series_job
 
 router = APIRouter(prefix="/api/v1", tags=["series"])
 
@@ -122,6 +124,7 @@ ERROR_RESPONSES = {
     502: {"model": ErrorResponse, "description": "Provider request failed"},
     503: {"model": ErrorResponse, "description": "Provider unavailable"},
     504: {"model": ErrorResponse, "description": "Provider timeout"},
+    202: {"description": "Long-running series query accepted; poll the returned jobId."},
 }
 
 
@@ -176,8 +179,24 @@ async def get_series(
             },
         )
 
-    expected_months = (end_date.year - start_date.year) * 12 + end_date.month - start_date.month + 1
-    min_years = variable.min_years
+    if variable.source.provider == "planetary-computer":
+        query_key = f"{variable_id}:{region_id}:{start_date.isoformat()}:{end_date.isoformat()}"
+        job = get_or_start_series_job(
+            query_key,
+            (variable_id, region_id, start_date, end_date),
+            lambda: fetch_monthly_series(variable_id, region_id, start_date, end_date),
+        )
+        if job.status == "processing":
+            return JSONResponse(
+                status_code=202,
+                headers={"Retry-After": "2"},
+                content={"data": {"jobId": job.job_id, "status": job.status}},
+            )
+        if job.status == "failed":
+            _raise_job_error(job.error)
+        return _build_series_response(
+            variable_id, region_id, start_date, end_date, job.points or []
+        )
 
     try:
         time_series = await fetch_monthly_series(
@@ -191,6 +210,55 @@ async def get_series(
             status_code=exc.status_code,
             detail={"code": exc.code, "message": str(exc), "details": {"provider": exc.provider}},
         ) from exc
+
+    return _build_series_response(
+        variable_id, region_id, start_date, end_date, time_series
+    )
+
+
+@router.get("/series/jobs/{job_id}", responses=ERROR_RESPONSES)
+async def get_series_job_status(job_id: str):
+    """Poll a long-running series query and return the normal series DTO when ready."""
+    job = get_series_job(job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "NOT_FOUND", "message": "Series query job was not found or expired", "details": {}},
+        )
+    if job.status == "processing":
+        return JSONResponse(
+            status_code=202,
+            headers={"Retry-After": "2"},
+            content={"data": {"jobId": job.job_id, "status": job.status}},
+        )
+    if job.status == "failed":
+        _raise_job_error(job.error)
+
+    # The query key is stored on the job so its completed data can be formatted
+    # as the exact same DTO returned by the synchronous providers.
+    variable_id, region_id, start_date, end_date = job.query
+    return _build_series_response(
+        variable_id, region_id, start_date, end_date, job.points or []
+    )
+
+
+def _raise_job_error(error: Exception | None) -> None:
+    if isinstance(error, ProviderError):
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code, "message": str(error), "details": {"provider": error.provider}},
+        ) from error
+    raise HTTPException(
+        status_code=502,
+        detail={"code": "PROVIDER_ERROR", "message": "The planetary-computer request failed", "details": {}},
+    )
+
+
+def _build_series_response(variable_id, region_id, start_date, end_date, time_series):
+    variable = get_variable(variable_id)
+    region = get_region(region_id)
+    expected_months = (end_date.year - start_date.year) * 12 + end_date.month - start_date.month + 1
+    min_years = variable.min_years
 
     # Convert to contract TimeSeriesPointDTO
     contract_time_series = []

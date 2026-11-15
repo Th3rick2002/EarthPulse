@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import type { Region, SeriesQuery, Variable } from '../types/api'
 
+// The v1 catalog does not expose supported variable/region pairs yet.
+// Keep the MVP allowlist aligned with backend/app/data/catalog.py.
+const MVP_REGION_IDS_BY_VARIABLE: Record<string, string[]> = {
+  ndvi: ['amazon'],
+  air_temperature: ['arctic'],
+  precipitation: ['amazon'],
+}
+
 interface Props {
   variables: Variable[]
   regions: Region[]
@@ -47,12 +55,19 @@ export default function QueryPanel({
   onRegionChange,
 }: Props) {
   const [variableId, setVariableId] = useState(variables[0]?.variableId ?? '')
-  const [regionId, setRegionId] = useState(regions[0]?.regionId ?? '')
+  const [regionId, setRegionId] = useState(() => {
+    const allowedIds = MVP_REGION_IDS_BY_VARIABLE[variables[0]?.variableId ?? ''] ?? []
+    return regions.find((region) => allowedIds.includes(region.regionId))?.regionId ?? ''
+  })
   const [range, setRange] = useState(() =>
     defaultRange(variables[0]?.minYears ?? 5),
   )
 
   const variable = variables.find((v) => v.variableId === variableId)
+  const supportedRegionIds = MVP_REGION_IDS_BY_VARIABLE[variableId] ?? []
+  const availableRegions = regions.filter((region) =>
+    supportedRegionIds.includes(region.regionId),
+  )
   const minYears = variable?.minYears ?? 5
 
   let error: string | null = null
@@ -68,6 +83,15 @@ export default function QueryPanel({
 
   function handleVariableChange(id: string) {
     setVariableId(id)
+    const nextRegionIds = MVP_REGION_IDS_BY_VARIABLE[id] ?? []
+    const nextRegions = regions.filter((region) =>
+      nextRegionIds.includes(region.regionId),
+    )
+    const nextRegionId = nextRegions.some((region) => region.regionId === regionId)
+      ? regionId
+      : (nextRegions[0]?.regionId ?? '')
+    setRegionId(nextRegionId)
+    onRegionChange(nextRegionId)
     const next = variables.find((v) => v.variableId === id)
     const nextMin = next?.minYears ?? 5
     if (
@@ -126,7 +150,7 @@ export default function QueryPanel({
             value={regionId}
             onChange={(e) => handleRegionChange(e.target.value)}
           >
-            {regions.map((r) => (
+            {availableRegions.map((r) => (
               <option key={r.regionId} value={r.regionId}>
                 {r.name}
                 {r.type === 'custom' ? ' (personalizada)' : ''}

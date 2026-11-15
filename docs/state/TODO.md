@@ -15,12 +15,11 @@ Las historias y criterios de terminado se gestionan en el [GitHub Project TrendS
 
 - [ ] Publicar en catálogo las combinaciones variable-región válidas.
 - [ ] Implementar `POST /api/v1/regions` con validación y persistencia.
-- [ ] Integrar Meteomatics y Planetary Computer con agregación/calidad reales.
-- [ ] Implementar caché TTL de 24 h y completar persistencia de despliegue.
+- [ ] Persistir jobs y caché fuera de memoria para soportar reinicios y múltiples instancias; hoy el resultado se reutiliza 24 h solo en el proceso actual.
 
 ## Prioridad media
 
-- [ ] Confirmar disponibilidad de CHIRPS en el plan Meteomatics.
+- [ ] Confirmar disponibilidad de CHIRPS y ERA5 histórico en el plan Meteomatics y probar consultas reales.
 - [ ] Validar fechas futuras, áreas máximas y bboxes custom.
 - [ ] Añadir logging estructurado, métricas y health checks de proveedor.
 - [ ] Confirmar CORS para orígenes de desarrollo y despliegue.

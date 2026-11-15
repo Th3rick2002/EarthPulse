@@ -58,10 +58,10 @@ NDVI_SOURCE = VariableSource(
 AIR_TEMP_SOURCE = VariableSource(
     provider="meteomatics",
     product="ecmwf-era5",
-    source_id="t_2m:C",
+    source_id="t_mean_2m_24h:C",
     native_unit="°C",
     aggregation="mean",
-    resolution="~30km / hourly",
+    resolution="~30km / daily mean derived from ERA5",
     access_method="Meteomatics API",
 )
 
@@ -91,7 +91,7 @@ VARIABLES: dict[str, Variable] = {
     "air_temperature": Variable(
         id="air_temperature",
         name="Air Temperature (2m)",
-        definition="Near-surface air temperature from ERA5 reanalysis. Monthly mean of hourly values.",
+        definition="Near-surface air temperature from ERA5 reanalysis. Monthly mean of daily 24-hour means.",
         category="temperature",
         canonical_unit="°C",
         min_years=5,

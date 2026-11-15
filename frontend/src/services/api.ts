@@ -88,10 +88,27 @@ export async function getRegions(): Promise<Region[]> {
 
 export async function getSeries(query: SeriesQuery): Promise<SeriesData> {
   try {
-    const { data } = await http.get<{ data: SeriesData }>('/series', {
+    const response = await http.get<{ data: SeriesData | { jobId: string; status: string } }>('/series', {
       params: query,
     })
-    return data.data
+    if (response.status !== 202) return response.data.data as SeriesData
+
+    const job = response.data.data as { jobId: string; status: string }
+    const deadline = Date.now() + 15 * 60_000
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2_000))
+      const result = await http.get<{
+        data: SeriesData | { jobId: string; status: string }
+      }>(`/series/jobs/${job.jobId}`, {
+        validateStatus: (status) => status === 200 || status === 202,
+      })
+      if (result.status === 200) return result.data.data as SeriesData
+    }
+    throw new ApiError(
+      'La consulta sigue procesándose. Vuelve a intentarlo en unos minutos.',
+      'JOB_TIMEOUT',
+      null,
+    )
   } catch (e) {
     throw asApiError(e)
   }

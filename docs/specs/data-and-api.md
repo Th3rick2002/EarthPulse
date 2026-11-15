@@ -42,6 +42,7 @@ Los modelos Pydantic en `backend/app/schemas/contract.py` y OpenAPI (`/openapi.j
 | `GET /api/v1/variables` | `{data: Variable[]}` |
 | `GET /api/v1/regions` | `{data: Region[]}` |
 | `GET /api/v1/series?variableId=…&regionId=…&startDate=…&endDate=…` | `{data: {variable, region, timeSeries[], trendAnalysis}}` |
+| `GET /api/v1/series` para Planetary Computer | `202 {data: {jobId, status: "processing"}}`; consultar `GET /api/v1/series/jobs/{jobId}` hasta recibir `200` con la misma respuesta de series |
 | `GET /api/v1/health` | `HealthResponse` directa, sin wrapper `data` |
 
 La creación de regiones personalizadas y otros endpoints no enumerados aquí siguen pendientes de implementación; el frontend no debe asumir que `POST /api/v1/regions` está disponible.
@@ -72,10 +73,10 @@ La creación de regiones personalizadas y otros endpoints no enumerados aquí si
 | variableId | Fuente y producto | Unidad de salida | Región |
 |---|---|---|---|
 | `ndvi` | Planetary Computer STAC `modis-13Q1-061`, asset `250m_16_days_NDVI` | NDVI adimensional | Amazonía |
-| `air_temperature` | Meteomatics ERA5 `t_2m:C` | °C | Ártico |
+| `air_temperature` | Meteomatics ERA5 `t_mean_2m_24h:C` | °C | Ártico |
 | `precipitation` | Meteomatics CHIRPS `precip_24h:mm` | mm | Amazonía |
 
-NDVI requiere aplicar escala `0.0001`, filtrar QA y resumir los compuestos de 16 días a mes. Temperatura se resume como media mensual. Precipitación diaria se suma por mes. Confirmar disponibilidad de CHIRPS en el plan Meteomatics. Mantener el mismo producto durante todo el intervalo; no mezclar fuentes históricas.
+NDVI consulta solo plataforma Terra (`MOD13Q1`), por cada tile y mes selecciona el compuesto de 16 días más cercano al día 15. El Data API de Planetary Computer recorta cada tile al bbox intersectado y devuelve NDVI+QA juntos como GeoTIFF de 256×256; se filtran píxeles cuyo `250m_16_days_pixel_reliability` no sea 0, se descartan valores fuera de -2000..10000 y se aplica escala `0.0001`. La media usa los píxeles válidos muestreados del compuesto seleccionado, con ponderación aproximada por área geográfica; es una estimación regional más gruesa que recorrer cada píxel nativo de 250 m. Un mes sin píxeles válidos es `missing`; no se interpola. Las consultas NDVI se ejecutan como trabajo asíncrono: `GET /series` puede responder `202` y el frontend consulta `GET /series/jobs/{jobId}` hasta que el resultado esté listo. Resultados completados se conservan en memoria por 24 horas en el proceso actual. Meteomatics consulta la media diaria de temperatura (`t_mean_2m_24h:C`) y la promedia por mes; la precipitación diaria (`precip_24h:mm`) se suma por mes. Ambos valores diarios se agregan espacialmente como media del polígono regional, usando la malla nativa del producto. Mantener el mismo producto durante todo el intervalo; no mezclar fuentes históricas.
 
 Planetary Computer se consulta mediante STAC y assets cloud-optimized. Meteomatics requiere autenticación y el historial depende del plan. Giovanni y CO₂ quedan fuera del MVP hasta identificar producto, acceso y cobertura. LST MODIS (`modis-11A2-061`) es posterior y representa temperatura de superficie, no temperatura del aire.
 
