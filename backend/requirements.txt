@@ -6,3 +6,8 @@ pandas
 numpy
 scipy
 python-dotenv
+pystac-client
+planetary-computer
+stackstac
+xarray
+rasterio

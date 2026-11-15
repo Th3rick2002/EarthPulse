@@ -1,6 +1,6 @@
 # TrendScope backend
 
-Backend planificado con FastAPI y Python 3.11. `Dockerfile` fija `python:3.11-slim`; usa esa versión para desarrollo local. El entorno virtual `venv/` que pueda existir en tu equipo no se comparte ni se versiona.
+API FastAPI para catálogo, series mensuales y análisis de tendencias. Docker fija Python 3.11; usa esa versión para desarrollo local.
 
 ## Requisitos
 
@@ -13,7 +13,7 @@ Comprueba la versión:
 python3.11 --version
 ```
 
-## Crear entorno e instalar dependencias
+## Instalar dependencias
 
 Desde `backend/`:
 
@@ -26,18 +26,35 @@ pip install -r requirements.txt
 
 En Windows PowerShell activa el entorno con `.venv\Scripts\Activate.ps1`.
 
-## Ejecutar
+## Configuración y ejecución
 
-Una vez creado `app/main.py` con el objeto `app` de FastAPI:
+Desde `backend/`, crea el archivo de configuración y edita las credenciales:
 
 ```bash
-uvicorn app.main:app --reload
+cp .env.example .env
 ```
 
-La API local quedará en `http://127.0.0.1:8000`; FastAPI publica documentación interactiva en `/docs`.
+La integración consulta la temperatura ERA5 y la precipitación CHIRPS como estadísticas diarias del polígono de la región y las agrega por mes. La cuenta debe tener habilitados los productos históricos `ecmwf-era5` y `chc-chirps3`; el producto también se puede cambiar con `METEOMATICS_TEMPERATURE_SOURCE` y `METEOMATICS_PRECIPITATION_SOURCE`. `GET /api/v1/availability?variableId=precipitation` devuelve cobertura vigente de lluvia, cacheada durante seis horas; el backend y el selector validan los meses contra ese límite.
 
-## Estado actual
+NDVI consulta la colección STAC `modis-13Q1-061`, selecciona por tile el compuesto de 16 días más próximo a mitad de cada mes, filtra píxeles con confiabilidad MODIS igual a 0 y aplica escala `0.0001`. No requiere credenciales. Como puede tomar más tiempo que una petición HTTP, se ejecuta en segundo plano y el cliente consulta el job hasta que termina.
 
-El backend aún no incluye `app/main.py` ni routers. La lista inicial de dependencias cubre el stack del plan; no hay que crear secretos reales en el repositorio. Usa `.env.example` como plantilla y variables de entorno para credenciales.
+`POST /api/v1/series/compare` recibe de una a cuatro cajas rectangulares del mapa y devuelve una serie independiente por cada área. El periodo debe cubrir de 1 a 50 años completos; cada rectángulo admite hasta 35° de ancho y 25° de alto. Las respuestas completas se guardan 24 horas en `backend/data/trendscope.db` (SQLite), por variable, producto, área y periodo; al repetir una consulta exacta no se vuelve a llamar al proveedor. En Docker, monta `backend/data` como volumen si necesitas conservar la caché al recrear el contenedor.
 
-Consulta [`../docs/specs/data-and-api.md`](../docs/specs/data-and-api.md) para el contrato, los datos y las fuentes.
+No subas `backend/.env` ni incluyas credenciales en logs.
+
+```bash
+uvicorn app.main:app --reload --env-file .env
+```
+
+Ejecuta desde `backend/`; la API queda en `http://127.0.0.1:8000`. Swagger está en `/docs` y OpenAPI en `/openapi.json`.
+
+Desde la raíz también puedes levantar backend y frontend juntos con `./scripts/dev.sh`; el script carga `backend/.env` automáticamente.
+
+## Rutas principales
+
+- `GET /api/v1/variables`
+- `GET /api/v1/regions`
+- `GET /api/v1/series?variableId=...&regionId=...&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`
+- `GET /api/v1/health`
+
+Las fechas de series deben cubrir meses completos. Consulta [`../docs/specs/data-and-api.md`](../docs/specs/data-and-api.md) para el contrato, las fuentes y la cobertura del análisis.
