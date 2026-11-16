@@ -24,6 +24,7 @@ Los modelos Pydantic en `backend/app/schemas/contract.py` y OpenAPI (`/openapi.j
 - Errores: `{ "error": { "code", "message", "details", "requestId" } }`; el mismo ID se devuelve en `X-Request-ID`.
 - Fechas: ISO 8601. `startDate` y `endDate` son inclusivas y cubren meses completos: inicio día 1, fin último día. Periodo de 1 a 50 años.
 - El frontend consulta exclusivamente el backend; no llama a Planetary Computer, Meteomatics ni a Firestore.
+- CORS permite los orígenes configurados en `CORS_ORIGINS` (lista separada por comas). En producción, configurar en Render el origen exacto de Cloudflare Pages, incluyendo `https://` y sin ruta.
 
 ### DTOs
 
@@ -82,7 +83,7 @@ La disponibilidad de lluvia se consulta con `GET /api/v1/availability?variableId
 
 NDVI consulta solo plataforma Terra (`MOD13Q1`), por cada tile y mes selecciona el compuesto de 16 días más cercano al día 15. El Data API de Planetary Computer recorta cada tile al bbox intersectado y devuelve NDVI+QA juntos como GeoTIFF de 256×256; se filtran píxeles cuyo `250m_16_days_pixel_reliability` no sea 0, se descartan valores fuera de -2000..10000 y se aplica escala `0.0001`. La media usa los píxeles válidos muestreados del compuesto seleccionado, con ponderación aproximada por área geográfica; es una estimación regional más gruesa que recorrer cada píxel nativo de 250 m. Un mes sin píxeles válidos es `missing`; no se interpola. Las consultas NDVI se ejecutan como trabajo asíncrono. Meteomatics consulta una sola serie diaria por polígono, la agrega a meses y usa concurrencia acotada entre zonas. La media diaria de temperatura (`t_mean_2m_24h:C`) se promedia por mes; la precipitación diaria (`precip_24h:mm`) se suma por mes. Mantener el mismo producto durante todo el intervalo; no mezclar fuentes históricas.
 
-Las respuestas completas de series se guardan en SQLite por variable, producto, bbox y periodo; TTL de 24 horas. Una repetición exacta evita volver a llamar al proveedor y también funciona después de reiniciar la API local. NDVI conserva además su caché en memoria durante el proceso.
+Las respuestas completas de series se guardan en SQLite por variable, producto, bbox y periodo; TTL de 24 horas. Una repetición exacta evita volver a llamar al proveedor y también funciona después de reiniciar la API local. NDVI conserva además su caché en memoria durante el proceso. Render tiene filesystem efímero por defecto: para conservar este archivo en producción debe montarse un disco persistente en la ruta de datos. Render permite discos persistentes en servicios pagos, pero un servicio con disco no puede escalar a varias instancias; la caché compartida requerirá otro datastore si se necesita escalado horizontal.
 
 Planetary Computer se consulta mediante STAC y assets cloud-optimized. Meteomatics requiere autenticación y el historial depende del plan. Giovanni y CO₂ quedan fuera del MVP hasta identificar producto, acceso y cobertura. LST MODIS (`modis-11A2-061`) es posterior y representa temperatura de superficie, no temperatura del aire.
 

@@ -22,5 +22,5 @@
 
 ## Infraestructura
 
-- El contenedor debe escuchar en `0.0.0.0` y respetar el puerto proporcionado por Cloud Run.
-- No asumir que el disco local de Cloud Run persiste entre instancias o reinicios.
+- El servicio en Render debe escuchar en `0.0.0.0` y respetar el puerto proporcionado por `PORT`.
+- El filesystem de Render es efímero por defecto. SQLite en producción requiere un disco persistente montado y limita el servicio a una instancia; no asumir que el archivo se comparte entre instancias.

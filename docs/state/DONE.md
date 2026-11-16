@@ -57,3 +57,12 @@
 - La marca visible y el título de la pestaña ahora dicen EarthPulse. Se vinculó el mensaje de validación con el botón de consulta para tecnologías de asistencia.
 - La lista de zonas del mapa se rediseñó como tarjetas responsivas, con nombre editable, coordenadas completas y botón de quitar mediante icono accesible.
 - El control de quitar usa una X discreta sin fondo en la esquina superior derecha de cada tarjeta.
+
+## Sincronización GitHub Project — 2026-11-15
+
+- Se marcaron Done las historias de catálogo, DTO/OpenAPI, flujo frontend, proveedores NDVI y Meteomatics, análisis de tendencia y visualización con mapa/gráfica/veredicto.
+- Se dejaron In Progress las rutas FastAPI (falta `POST /regions`), la caché (SQLite está implementada; falta persistencia compartida para producción) y despliegue GCP (avance externo por confirmar).
+- La historia de tipos/client API está In Progress: el cliente funciona y falta generar los tipos OpenAPI. Permanecen Todo la configuración de Firestore y la persistencia de regiones custom en backend y frontend.
+- Se actualizó la historia de visualización para reflejar el mapa Leaflet acordado en lugar del globo 3D anterior.
+- El objetivo de despliegue se actualizó de GCP/Cloud Run a Render; la configuración real de producción sigue pendiente.
+- FastAPI ahora carga `CORS_ORIGINS` desde el entorno, conserva localhost como default de desarrollo y documenta la configuración del origen Cloudflare Pages en Render.
