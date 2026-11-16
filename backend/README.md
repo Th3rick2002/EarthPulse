@@ -42,6 +42,10 @@ NDVI consulta la colección STAC `modis-13Q1-061`, selecciona por tile el compue
 
 No subas `backend/.env` ni incluyas credenciales en logs.
 
+### Render y frontend en Cloudflare Pages
+
+En las variables de entorno del servicio backend en Render, configura `CORS_ORIGINS` con el origen exacto del sitio de Cloudflare Pages, por ejemplo `https://earthpulse.pages.dev` (sin ruta ni `/` final). Para permitir más de un origen, sepáralos con comas. Al guardar la variable, Render vuelve a desplegar el servicio. El backend mantiene `localhost:5173` y `127.0.0.1:5173` como valores predeterminados de desarrollo cuando `CORS_ORIGINS` no está definido.
+
 ```bash
 uvicorn app.main:app --reload --env-file .env
 ```
