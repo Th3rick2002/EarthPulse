@@ -67,4 +67,4 @@
 - El objetivo de despliegue se actualizó de GCP/Cloud Run a Render; la configuración real de producción sigue pendiente.
 - FastAPI ahora carga `CORS_ORIGINS` desde el entorno, conserva localhost como default de desarrollo y documenta la configuración del origen Cloudflare Pages en Render.
 - El origen de Cloudflare Pages está configurado en Render: la respuesta publicada incluye `Access-Control-Allow-Origin` y frontend/backend ya se comunican.
-- Se consultó el job fallido en Render: responde `PROVIDER_ERROR` de Planetary Computer, sin detalle upstream. El backend ahora registra excepciones inesperadas del proveedor con stack trace para facilitar el diagnóstico tras el siguiente despliegue.
+- Se diagnosticó en Render el `502` de NDVI como `ImportError: libexpat.so.1` al importar Rasterio. Se añadió `libexpat1` a la imagen Docker y se conserva logging de excepciones inesperadas; falta desplegar y verificar la consulta real.
