@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 import asyncio
 import csv
 import io
+import logging
 import math
 import re
 import threading
@@ -13,6 +14,9 @@ from dataclasses import dataclass
 import httpx
 from calendar import monthrange
 from app.data.catalog import get_variable, get_region
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -698,6 +702,11 @@ async def _fetch_from_provider(
             upstream_message=upstream_message,
         ) from exc
     except Exception as exc:
+        logger.exception(
+            "Unexpected provider failure (provider=%s, variable_id=%s)",
+            provider,
+            variable_id,
+        )
         raise ProviderError(
             provider=provider,
             code="PROVIDER_ERROR",
