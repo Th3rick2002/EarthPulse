@@ -21,7 +21,8 @@ Las historias y criterios de terminado se gestionan en el [GitHub Project TrendS
 - [ ] Confirmar disponibilidad de CHIRPS y ERA5 histórico en el plan Meteomatics y probar consultas reales en el despliegue.
 - [ ] Validar cobertura temporal histórica y límites de resolución en las cuatro zonas soportadas.
 - [ ] Añadir logging estructurado, métricas y health checks de proveedor.
-- [ ] Configurar `CORS_ORIGINS` en Render con el origen exacto de Cloudflare Pages y comprobar `/api/v1/variables` desde el frontend publicado.
+- [x] Configurar `CORS_ORIGINS` en Render con el origen exacto de Cloudflare Pages; el frontend publicado ya se comunica con el backend.
+- [ ] Desplegar el log de diagnóstico del proveedor, repetir la consulta NDVI y revisar el stack trace de Render para identificar la excepción de Planetary Computer.
 - [ ] Completar despliegue de backend en Render; usar `PORT`, CORS y variables secretas del servicio.
 - [ ] Configurar Firestore si se mantiene como caché compartida de producción.
 
