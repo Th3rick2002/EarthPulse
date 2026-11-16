@@ -22,7 +22,7 @@ Las historias y criterios de terminado se gestionan en el [GitHub Project TrendS
 - [ ] Validar cobertura temporal histórica y límites de resolución en las cuatro zonas soportadas.
 - [ ] Añadir logging estructurado, métricas y health checks de proveedor.
 - [x] Configurar `CORS_ORIGINS` en Render con el origen exacto de Cloudflare Pages; el frontend publicado ya se comunica con el backend.
-- [ ] Desplegar el log de diagnóstico del proveedor, repetir la consulta NDVI y revisar el stack trace de Render para identificar la excepción de Planetary Computer.
+- [ ] Desplegar la imagen Docker con `libexpat1` y verificar una consulta NDVI publicada end-to-end.
 - [ ] Completar despliegue de backend en Render; usar `PORT`, CORS y variables secretas del servicio.
 - [ ] Configurar Firestore si se mantiene como caché compartida de producción.
 
